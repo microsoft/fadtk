@@ -239,4 +239,4 @@ class FrechetAudioDistance:
             
         except Exception as e:
             print("[Frechet Audio Distance] exception thrown, {}".format(str(e)))
-            return -1
+            raise e
