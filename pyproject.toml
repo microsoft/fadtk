@@ -24,6 +24,7 @@ dependencies = [
   'tqdm',
   'soundfile',
   'resampy',
+  'hypy_utils'
 ]
 
 [project.urls]
