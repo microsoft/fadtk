@@ -14,6 +14,9 @@ from tqdm import tqdm
 import soundfile as sf
 import resampy
 from multiprocessing.dummy import Pool as ThreadPool
+from pathlib import Path
+from hypy_utils.tqdm_utils import tq, tmap, pmap, smap
+
 from .models.pann import Cnn14_16k
 
 
@@ -68,6 +71,28 @@ class FrechetAudioDistance:
             self.model.load_state_dict(checkpoint['model'])
 
         self.model.eval()
+
+    def cache_embedding_file(self, audio_dir: str | Path, sr=SAMPLE_RATE) -> np.ndarray:
+        """
+        Compute embedding for an audio file and cache it to a file.
+        """
+        audio_dir = Path(audio_dir)
+        cache = audio_dir.parent / "embeddings" / audio_dir.with_suffix(".npy").name
+
+        if cache.exists():
+            return np.load(cache)
+
+        # Load file
+        wav_data = load_audio_task(audio_dir)
+        
+        # Compute embedding
+        embd = self.get_embedding(wav_data, sr)
+        
+        # Save embedding
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        np.save(cache, embd)
+
+        return embd
 
     def get_embedding(self, audio: np.ndarray, sr=SAMPLE_RATE) -> np.ndarray:
         """
