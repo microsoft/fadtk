@@ -68,6 +68,22 @@ class FrechetAudioDistance:
             self.model.load_state_dict(checkpoint['model'])
 
         self.model.eval()
+
+    def get_embedding(self, audio: np.ndarray, sr=SAMPLE_RATE) -> np.ndarray:
+        """
+        Get embedding for one audio sample
+        """
+        if self.model_name == "vggish":
+            embd = self.model.forward(audio, sr)
+        elif self.model_name == "pann":
+            with torch.no_grad():
+                out = self.model(torch.tensor(audio).float().unsqueeze(0), None)
+                embd = out['embedding'].data[0]
+        if self.device == torch.device('cuda'):
+            embd = embd.cpu()
+        embd = embd.detach().numpy()
+
+        return embd
     
     def get_embeddings(self, x, sr=SAMPLE_RATE):
         """
@@ -79,15 +95,7 @@ class FrechetAudioDistance:
         embd_lst = []
         try:
             for audio in tqdm(x, disable=(not self.verbose)):
-                if self.model_name == "vggish":
-                    embd = self.model.forward(audio, sr)
-                elif self.model_name == "pann":
-                    with torch.no_grad():
-                        out = self.model(torch.tensor(audio).float().unsqueeze(0), None)
-                        embd = out['embedding'].data[0]
-                if self.device == torch.device('cuda'):
-                    embd = embd.cpu()
-                embd = embd.detach().numpy()
+                embd = self.get_embedding(audio, sr)
                 embd_lst.append(embd)
         except Exception as e:
             print("[Frechet Audio Distance] get_embeddings throw an exception: {}".format(str(e)))
