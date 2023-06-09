@@ -190,32 +190,29 @@ class FrechetAudioDistance:
         return (diff.dot(diff) + np.trace(sigma1)
                 + np.trace(sigma2) - 2 * tr_covmean)
     
-    def __load_audio_files(self, dir):
-        task_results = []
+    def get_embeddings_files(self, dir: str | Path):
+        """
+        Get embeddings for all audio files in a directory.
+        """
+        dir = Path(dir)
 
-        pool = ThreadPool(self.audio_load_worker)
-        pbar = tqdm(total=len(os.listdir(dir)), disable=(not self.verbose))
-
-        def update(*a):
-            pbar.update()
+        # List valid audio files
+        files = [dir / f for f in os.listdir(dir) if f.endswith(".wav")]
+        files = [f for f in files if f.is_file()]
 
         if self.verbose:
-            print("[Frechet Audio Distance] Loading audio from {}...".format(dir))
-        for fname in os.listdir(dir):
-            res = pool.apply_async(load_audio_task, args=(os.path.join(dir, fname),), callback=update)
-            task_results.append(res)
-        pool.close()
-        pool.join()     
+            print(f"[Frechet Audio Distance] Loading {len(files)} audio files from {dir}...")
 
-        return [k.get() for k in task_results] 
+        # Map load task
+        # embd_lst = tmap(self.cache_embedding_file, files, disable=(not self.verbose), desc="Loading audio files...")
+        embd_lst = smap(self.cache_embedding_file, files)
+
+        return np.concatenate(embd_lst, axis=0)
 
     def score(self, background_dir, eval_dir, store_embds=False):
         try:
-            audio_background = self.__load_audio_files(background_dir)
-            audio_eval = self.__load_audio_files(eval_dir)
-
-            embds_background = self.get_embeddings(audio_background)
-            embds_eval = self.get_embeddings(audio_eval)
+            embds_background = self.get_embeddings_files(background_dir)
+            embds_eval = self.get_embeddings_files(eval_dir)
 
             if store_embds:
                 np.save("embds_background.npy", embds_background)
