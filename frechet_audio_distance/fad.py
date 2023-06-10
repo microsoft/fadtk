@@ -110,23 +110,6 @@ class FrechetAudioDistance:
 
         return embd
     
-    def get_embeddings(self, x, sr=SAMPLE_RATE):
-        """
-        Get embeddings using VGGish model.
-        Params:
-        -- x    : a list of np.ndarray audio samples
-        -- sr   : Sampling rate, if x is a list of audio samples. Default value is 16000.
-        """
-        embd_lst = []
-        try:
-            for audio in tqdm(x, disable=(not self.verbose)):
-                embd = self.get_embedding(audio, sr)
-                embd_lst.append(embd)
-        except Exception as e:
-            print("[Frechet Audio Distance] get_embeddings throw an exception: {}".format(str(e)))
-        
-        return np.concatenate(embd_lst, axis=0)
-    
     def calculate_embd_statistics(self, embd_lst):
         if isinstance(embd_lst, list):
             embd_lst = np.array(embd_lst)
@@ -209,20 +192,13 @@ class FrechetAudioDistance:
 
         return np.concatenate(embd_lst, axis=0)
 
-    def score(self, background_dir, eval_dir, store_embds=False):
+    def score(self, background_dir, eval_dir):
         try:
             embds_background = self.get_embeddings_files(background_dir)
             embds_eval = self.get_embeddings_files(eval_dir)
 
-            if store_embds:
-                np.save("embds_background.npy", embds_background)
-                np.save("embds_eval.npy", embds_eval)
-
-            if len(embds_background) == 0:
-                print("[Frechet Audio Distance] background set dir is empty, exitting...")
-                return -1
-            if len(embds_eval) == 0:
-                print("[Frechet Audio Distance] eval set dir is empty, exitting...")
+            if len(embds_background) == 0 or len(embds_eval) == 0:
+                print("[Frechet Audio Distance] background or eval set is empty, exitting...")
                 return -1
             
             mu_background, sigma_background = self.calculate_embd_statistics(embds_background)
