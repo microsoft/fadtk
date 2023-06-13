@@ -91,3 +91,31 @@ class EncodecModel(ModelLoader):
         with torch.no_grad():
             frames = self.model.encode(audio.to(self.device))
         return torch.cat([e[0] for e in frames], dim=-1)
+    
+class MERTModel(ModelLoader):
+    """
+    MERT model from https://huggingface.co/m-a-p/MERT-v1-330M
+    """
+    def __init__(self, size='v1-95M'):
+        super().__init__(f"MERT-{size}")
+
+    def load_model(self):
+        from transformers import Wav2Vec2FeatureExtractor
+        from transformers import AutoModel
+        
+        self.model = AutoModel.from_pretrained(f"m-a-p/{self.name}", trust_remote_code=True)
+        self.processor = Wav2Vec2FeatureExtractor.from_pretrained(f"m-a-p/{self.name}",trust_remote_code=True)
+        self.sr = self.processor.sampling_rate
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=False)
+            out = out.last_hidden_state
+        
+        # print(out.shape) # [1, timeframes, 768]
+        # print(out[-1].shape) # [timeframes, 768]
+
+        return out[-1]
+        
