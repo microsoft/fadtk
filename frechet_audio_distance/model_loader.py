@@ -72,3 +72,22 @@ class PANNModel(ModelLoader):
         with torch.no_grad():
             out = self.model(torch.tensor(audio).float().unsqueeze(0), None)
             return out['embedding'].data[0]
+
+class EncodecModel(ModelLoader):
+    """
+    Encodec model from https://github.com/facebookresearch/encodec
+    """
+    def __init__(self):
+        super().__init__("encodec")
+
+    def load_model(self):
+        from encodec import EncodecModel
+        self.model = EncodecModel.encodec_model_24khz()
+        self.sr = 24000
+        self.model.set_target_bandwidth(12)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        with torch.no_grad():
+            frames = self.model.encode(audio.to(self.device))
+        return torch.cat([e[0] for e in frames], dim=-1)
