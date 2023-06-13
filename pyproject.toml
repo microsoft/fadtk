@@ -25,7 +25,8 @@ dependencies = [
   'soundfile',
   'resampy',
   'hypy_utils',
-  'encodec'
+  'encodec',
+  'nnAudio'
 ]
 
 [project.urls]
