@@ -6,107 +6,77 @@ Frechet distance implementation adapted from: https://github.com/mseitzer/pytorc
 VGGish adapted from: https://github.com/harritaylor/torchvggish
 """
 import os
+import random
+import subprocess
+import tempfile
 import numpy as np
 import torch
 from torch import nn
 from scipy import linalg
-from tqdm import tqdm
 import soundfile as sf
-import resampy
-from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
-from hypy_utils.tqdm_utils import tq, tmap, pmap, smap
+from hypy_utils import write
+from hypy_utils.tqdm_utils import tq, pmap, tmap, smap
 
 from .models.pann import Cnn14_16k
-
-
-SAMPLE_RATE = 16000
-
-
-def load_audio_task(fname):
-    wav_data, sr = sf.read(fname, dtype='int16')
-    assert wav_data.dtype == np.int16, 'Bad sample type: %r' % wav_data.dtype
-    wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
-
-    # Convert to mono
-    if len(wav_data.shape) > 1:
-        wav_data = np.mean(wav_data, axis=1)
-
-    if sr != SAMPLE_RATE:
-        wav_data = resampy.resample(wav_data, sr, SAMPLE_RATE)
-
-    return wav_data
-
+from .model_loader import ModelLoader
 
 class FrechetAudioDistance:
-    def __init__(self, model_name="vggish", use_pca=False, use_activation=False, verbose=False, audio_load_worker=8):
-        self.model_name = model_name
+    def __init__(self, ml: ModelLoader, verbose=False, audio_load_worker=8):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-        self.__get_model(model_name=model_name, use_pca=use_pca, use_activation=use_activation)
+        self.ml.load_model()
         self.verbose = verbose
         self.audio_load_worker = audio_load_worker
-    
-    def __get_model(self, model_name="vggish", use_pca=False, use_activation=False):
-        """
-        Params:
-        -- x   : Either 
-            (i) a string which is the directory of a set of audio files, or
-            (ii) a np.ndarray of shape (num_samples, sample_length)
-        """
-        if model_name == "vggish":
-            # S. Hershey et al., "CNN Architectures for Large-Scale Audio Classification", ICASSP 2017
-            self.model = torch.hub.load('harritaylor/torchvggish', 'vggish')
-            if not use_pca:
-                self.model.postprocess = False
-            if not use_activation:
-                self.model.embeddings = nn.Sequential(*list(self.model.embeddings.children())[:-1])
+
+    def load_audio(self, f: str | Path):
+
+        f = Path(f)
         
-        elif model_name == "pann":
-            # Kong et al., "PANNs: Large-Scale Pretrained Audio Neural Networks for Audio Pattern Recognition", IEEE/ACM Transactions on Audio, Speech, and Language Processing 28 (2020)
-            model_path = os.path.join(torch.hub.get_dir(), "Cnn14_16k_mAP%3D0.438.pth")
-            if not(os.path.exists(model_path)):
-                torch.hub.download_url_to_file('https://zenodo.org/record/3987831/files/Cnn14_16k_mAP%3D0.438.pth', torch.hub.get_dir())
-            self.model = Cnn14_16k(sample_rate=16000, window_size=512, hop_size=160, mel_bins=64, fmin=50, fmax=8000, classes_num=527)
-            checkpoint = torch.load(model_path, map_location=self.device)
-            self.model.load_state_dict(checkpoint['model'])
+        # Create temporary directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            new = (tmpdir / f.name).with_suffix(".wav")
+            subprocess.run(["/usr/bin/ffmpeg", 
+                            "-hide_banner", "-loglevel", "error", 
+                            "-i", f,
+                            "-ar", str(self.sr), "-ac", "1", '-acodec', 'pcm_s16le',
+                            new])
+            
+            if self.ml.name == "encodec":
+                import torchaudio
+                from encodec.utils import convert_audio
 
-        self.model.eval()
+                wav, sr = torchaudio.load(new)
+                wav = convert_audio(wav, sr, self.sr, self.model.channels)
+                return wav.unsqueeze(0)
+            
+            print(f, new)
+            input()
 
-    def cache_embedding_file(self, audio_dir: str | Path, sr=SAMPLE_RATE) -> np.ndarray:
+            wav_data, _ = sf.read(new, dtype='int16')
+            wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
+
+            return wav_data
+
+    def cache_embedding_file(self, audio_dir: str | Path) -> np.ndarray:
         """
         Compute embedding for an audio file and cache it to a file.
         """
         audio_dir = Path(audio_dir)
-        cache = audio_dir.parent / "embeddings" / audio_dir.with_suffix(".npy").name
+        cache = audio_dir.parent / "embeddings" / self.ml.name / audio_dir.with_suffix(".npy").name
 
         if cache.exists():
             return np.load(cache)
 
         # Load file
-        wav_data = load_audio_task(audio_dir)
+        wav_data = self.load_audio(audio_dir)
         
         # Compute embedding
-        embd = self.get_embedding(wav_data, sr)
+        embd = self.ml.get_embedding(wav_data)
         
         # Save embedding
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.save(cache, embd)
-
-        return embd
-
-    def get_embedding(self, audio: np.ndarray, sr=SAMPLE_RATE) -> np.ndarray:
-        """
-        Get embedding for one audio sample
-        """
-        if self.model_name == "vggish":
-            embd = self.model.forward(audio, sr)
-        elif self.model_name == "pann":
-            with torch.no_grad():
-                out = self.model(torch.tensor(audio).float().unsqueeze(0), None)
-                embd = out['embedding'].data[0]
-        if self.device == torch.device('cuda'):
-            embd = embd.cpu()
-        embd = embd.detach().numpy()
 
         return embd
     
@@ -180,7 +150,7 @@ class FrechetAudioDistance:
         dir = Path(dir)
 
         # List valid audio files
-        files = [dir / f for f in os.listdir(dir) if f.endswith(".wav")]
+        files = [dir / f for f in os.listdir(dir)]
         files = [f for f in files if f.is_file()]
 
         if self.verbose:
