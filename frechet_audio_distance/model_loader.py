@@ -13,20 +13,21 @@ class ModelLoader(ABC):
         self.model = None
         self.sr = None
         self.name = name
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     @abstractmethod
     def load_model(self):
         pass
 
     def get_embedding(self, audio: np.ndarray):
-        embd = self.__get_embedding(audio)
+        embd = self._get_embedding(audio)
         if self.device == torch.device('cuda'):
             embd = embd.cpu()
         embd = embd.detach().numpy()
         return embd
 
     @abstractmethod
-    def __get_embedding(self, audio: np.ndarray):
+    def _get_embedding(self, audio: np.ndarray):
         pass
 
 class VGGishModel(ModelLoader):
@@ -47,7 +48,7 @@ class VGGishModel(ModelLoader):
         self.sr = 16000
         self.model.eval()
 
-    def __get_embedding(self, audio: np.ndarray) -> np.ndarray:
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         return self.model.forward(audio, self.sr)
 
 class PANNModel(ModelLoader):
@@ -67,7 +68,7 @@ class PANNModel(ModelLoader):
         self.sr = 16000
         self.model.eval()
 
-    def __get_embedding(self, audio: np.ndarray) -> np.ndarray:
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             out = self.model(torch.tensor(audio).float().unsqueeze(0), None)
             return out['embedding'].data[0]

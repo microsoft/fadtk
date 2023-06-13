@@ -24,12 +24,12 @@ from .model_loader import ModelLoader
 class FrechetAudioDistance:
     def __init__(self, ml: ModelLoader, verbose=False, audio_load_worker=8):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+        self.ml = ml
         self.ml.load_model()
         self.verbose = verbose
         self.audio_load_worker = audio_load_worker
 
     def load_audio(self, f: str | Path):
-
         f = Path(f)
         
         # Create temporary directory
@@ -39,7 +39,7 @@ class FrechetAudioDistance:
             subprocess.run(["/usr/bin/ffmpeg", 
                             "-hide_banner", "-loglevel", "error", 
                             "-i", f,
-                            "-ar", str(self.sr), "-ac", "1", '-acodec', 'pcm_s16le',
+                            "-ar", str(self.ml.sr), "-ac", "1", '-acodec', 'pcm_s16le',
                             new])
             
             if self.ml.name == "encodec":
@@ -47,7 +47,7 @@ class FrechetAudioDistance:
                 from encodec.utils import convert_audio
 
                 wav, sr = torchaudio.load(new)
-                wav = convert_audio(wav, sr, self.sr, self.model.channels)
+                wav = convert_audio(wav, sr, self.ml.sr, self.model.channels)
                 return wav.unsqueeze(0)
             
             print(f, new)
