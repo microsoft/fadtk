@@ -47,11 +47,8 @@ class FrechetAudioDistance:
                 from encodec.utils import convert_audio
 
                 wav, sr = torchaudio.load(new)
-                wav = convert_audio(wav, sr, self.ml.sr, self.model.channels)
+                wav = convert_audio(wav, sr, self.ml.sr, self.ml.model.channels)
                 return wav.unsqueeze(0)
-            
-            print(f, new)
-            input()
 
             wav_data, _ = sf.read(new, dtype='int16')
             wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
