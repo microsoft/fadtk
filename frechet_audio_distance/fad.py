@@ -27,14 +27,14 @@ from .model_loader import ModelLoader
 def _cache_embedding_batch(args):
     fs: list[Path]
     ml: ModelLoader
-    fs, ml = args
-    fad = FrechetAudioDistance(ml)
+    fs, ml, kwargs = args
+    fad = FrechetAudioDistance(ml, **kwargs)
     for f in fs:
         print(f"Loading {f} using {ml.name}")
         fad.cache_embedding_file(f)
 
 
-def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], workers: int = 8):
+def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], workers: int = 8, **kwargs):
     """
     Get embeddings for all audio files in a directory.
 
@@ -57,17 +57,17 @@ def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], wo
     # Cache embeddings in parallel
     multiprocessing.set_start_method('spawn', force=True)
     with torch.multiprocessing.Pool(workers) as pool:
-        pool.map(_cache_embedding_batch, [(b, ml_fn()) for b in batches])
-    # pmap(_cache_embedding_batch, [(b, ml_fn()) for b in batches], max_workers=workers)
+        pool.map(_cache_embedding_batch, [(b, ml_fn(), kwargs) for b in batches])
 
 
 class FrechetAudioDistance:
-    def __init__(self, ml: ModelLoader, verbose=True, audio_load_worker=8):
+    def __init__(self, ml: ModelLoader, verbose=True, audio_load_worker=8, sox_path="sox"):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.ml = ml
         self.ml.load_model()
         self.verbose = verbose
         self.audio_load_worker = audio_load_worker
+        self.sox_path = sox_path
 
         # Disable gradient calculation because we're not training
         torch.autograd.set_grad_enabled(False)
@@ -83,33 +83,6 @@ class FrechetAudioDistance:
             cache_dir.mkdir(parents=True, exist_ok=True)
 
             # ffmpeg has bad resampling compared to SoX
-            # SoX has really bad file support compared to ffmpeg
-            # So we use a pipe
-
-            # ffmpeg_command = [
-            #     "/usr/bin/ffmpeg",
-            #     "-hide_banner", "-loglevel", "error",
-            #     "-i", f,
-            #     "-f", "wav",         # Convert to WAV format before piping
-            #     "-"
-            # ]
-
-            # sox_command = [
-            #     "sox",
-            #     "-t", "wav",           # Specify input format as WAV
-            #     "-",                   # Read from stdin
-            #     "-r", str(self.ml.sr), # Sample rate
-            #     "-c", "1",             # Channels
-            #     new
-            # ]
-
-            # ffmpeg_process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE)
-            # sox_process = subprocess.Popen(sox_command, stdin=ffmpeg_process.stdout)
-
-            # sox_process.communicate()  # Wait for SoX process to complete
-
-            # ffmpeg_process.stdout.close()
-            # sox_process.wait()
 
             # subprocess.run(["/usr/bin/ffmpeg", 
             #                 "-hide_banner", "-loglevel", "error", 
@@ -117,8 +90,7 @@ class FrechetAudioDistance:
             #                 "-ar", str(self.ml.sr), "-ac", "1", '-acodec', 'pcm_s16le',
             #                 new])
             
-            # Actually the pipe is not a good idea
-            subprocess.run(["/ws/sox-14.4.2/src/sox", f,
+            subprocess.run([self.sox_path, f,
                 "-r", str(self.ml.sr),
                 "-c", "1",
                 "-b", "16",
