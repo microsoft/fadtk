@@ -47,6 +47,7 @@ class VGGishModel(ModelLoader):
             self.model.embeddings = nn.Sequential(*list(self.model.embeddings.children())[:-1])
         self.sr = 16000
         self.model.eval()
+        self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         return self.model.forward(audio, self.sr)
@@ -59,18 +60,20 @@ class PANNModel(ModelLoader):
         super().__init__("pann")
 
     def load_model(self):
-        model_path = os.path.join(torch.hub.get_dir(), "Cnn14_16k_mAP%3D0.438.pth")
+        print(torch.hub.get_dir())
+        model_path = os.path.join(torch.hub.get_dir(), "PANNs-FAD.pth")
         if not(os.path.exists(model_path)):
-            torch.hub.download_url_to_file('https://zenodo.org/record/3987831/files/Cnn14_16k_mAP%3D0.438.pth', torch.hub.get_dir())
+            torch.hub.download_url_to_file('https://zenodo.org/record/3987831/files/Cnn14_16k_mAP%3D0.438.pth', dst=model_path, progress=True)
         self.model = Cnn14_16k(sample_rate=16000, window_size=512, hop_size=160, mel_bins=64, fmin=50, fmax=8000, classes_num=527)
         checkpoint = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
         self.sr = 16000
         self.model.eval()
+        self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
-            out = self.model(torch.tensor(audio).float().unsqueeze(0), None)
+            out = self.model(torch.tensor(audio).float().unsqueeze(0).to(self.device), None)
             return out['embedding'].data[0]
 
 class EncodecModel(ModelLoader):
