@@ -213,8 +213,11 @@ class FrechetAudioDistance:
             print(f"[Frechet Audio Distance] Loading {len(files)} audio files from {dir}...")
 
         # Map load task
-        # embd_lst = tmap(self.cache_embedding_file, files, disable=(not self.verbose), desc="Loading audio files...")
-        embd_lst = smap(self.cache_embedding_file, files)
+        # multiprocessing.set_start_method('spawn', force=True)
+        # with torch.multiprocessing.Pool(self.audio_load_worker) as pool:
+        #     embd_lst = pool.map(self.cache_embedding_file, files)
+        embd_lst = tmap(self.cache_embedding_file, files, disable=(not self.verbose), desc="Loading audio files...", max_workers=self.audio_load_worker)
+        # embd_lst = smap(self.cache_embedding_file, files)
 
         return np.concatenate(embd_lst, axis=0)
 
