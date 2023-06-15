@@ -5,10 +5,12 @@ Frechet distance implementation adapted from: https://github.com/mseitzer/pytorc
 
 VGGish adapted from: https://github.com/harritaylor/torchvggish
 """
+import multiprocessing
 import os
 import random
 import subprocess
 import tempfile
+from typing import Callable
 import numpy as np
 import torch
 from torch import nn
@@ -21,13 +23,54 @@ from hypy_utils.tqdm_utils import tq, pmap, tmap, smap
 from .models.pann import Cnn14_16k
 from .model_loader import ModelLoader
 
+
+def _cache_embedding_batch(args):
+    fs: list[Path]
+    ml: ModelLoader
+    fs, ml = args
+    fad = FrechetAudioDistance(ml)
+    for f in fs:
+        print(f"Loading {f} using {ml.name}")
+        fad.cache_embedding_file(f)
+
+
+def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], workers: int = 8):
+    """
+    Get embeddings for all audio files in a directory.
+
+    :param ml_fn: A function that returns a ModelLoader instance.
+    """
+    dir = Path(dir)
+
+    # List valid audio files
+    files = [dir / f for f in os.listdir(dir)]
+    files = [f for f in files if f.is_file()]
+
+    # Randomize order
+    random.shuffle(files)
+
+    print(f"[Frechet Audio Distance] Loading {len(files)} audio files from {dir}...")
+
+    # Split files into batches
+    batches = list(np.array_split(files, workers))
+    
+    # Cache embeddings in parallel
+    multiprocessing.set_start_method('spawn', force=True)
+    with torch.multiprocessing.Pool(workers) as pool:
+        pool.map(_cache_embedding_batch, [(b, ml_fn()) for b in batches])
+    # pmap(_cache_embedding_batch, [(b, ml_fn()) for b in batches], max_workers=workers)
+
+
 class FrechetAudioDistance:
-    def __init__(self, ml: ModelLoader, verbose=False, audio_load_worker=8):
+    def __init__(self, ml: ModelLoader, verbose=True, audio_load_worker=8):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.ml = ml
         self.ml.load_model()
         self.verbose = verbose
         self.audio_load_worker = audio_load_worker
+
+        # Disable gradient calculation because we're not training
+        torch.autograd.set_grad_enabled(False)
 
     def load_audio(self, f: str | Path):
         f = Path(f)
