@@ -91,6 +91,11 @@ class FrechetAudioDistance:
 
                 wav, sr = torchaudio.load(new)
                 wav = convert_audio(wav, sr, self.ml.sr, self.ml.model.channels)
+
+                # If it's longer than 3 minutes, cut it
+                if wav.shape[1] > 3 * 60 * self.ml.sr:
+                    wav = wav[:, :3 * 60 * self.ml.sr]
+                    
                 return wav.unsqueeze(0)
 
             wav_data, _ = sf.read(new, dtype='int16')
