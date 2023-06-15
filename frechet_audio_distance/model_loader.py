@@ -93,7 +93,14 @@ class EncodecModel(ModelLoader):
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             frames = self.model.encode(audio.to(self.device))
-        return torch.cat([e[0] for e in frames], dim=-1)
+            # print(frames[0][0].shape) # [batch_size, n_quantizers, timeframes]
+            frames = torch.cat([e[0] for e in frames], dim=-1)
+            # print(frames.shape) # [batch_size, n_quantizers, timeframes]
+            frames = frames[0]
+            # print(frames.shape) # [n_quantizers, timeframes]
+            frames = frames.transpose(0, 1)
+            # print(frames.shape) # [timeframes, n_quantizers]
+        return frames
     
 class MERTModel(ModelLoader):
     """
