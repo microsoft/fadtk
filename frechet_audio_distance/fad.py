@@ -74,34 +74,73 @@ class FrechetAudioDistance:
 
     def load_audio(self, f: str | Path):
         f = Path(f)
-        
-        # Create temporary directory
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            new = (tmpdir / f.name).with_suffix(".wav")
-            subprocess.run(["/usr/bin/ffmpeg", 
-                            "-hide_banner", "-loglevel", "error", 
-                            "-i", f,
-                            "-ar", str(self.ml.sr), "-ac", "1", '-acodec', 'pcm_s16le',
-                            new])
+
+        # Create a directory for storing normalized audio files
+        cache_dir = f.parent / "convert" / str(self.ml.sr)
+        new = (cache_dir / f.name).with_suffix(".wav")
+
+        if not new.exists():
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            # ffmpeg has bad resampling compared to SoX
+            # SoX has really bad file support compared to ffmpeg
+            # So we use a pipe
+
+            # ffmpeg_command = [
+            #     "/usr/bin/ffmpeg",
+            #     "-hide_banner", "-loglevel", "error",
+            #     "-i", f,
+            #     "-f", "wav",         # Convert to WAV format before piping
+            #     "-"
+            # ]
+
+            # sox_command = [
+            #     "sox",
+            #     "-t", "wav",           # Specify input format as WAV
+            #     "-",                   # Read from stdin
+            #     "-r", str(self.ml.sr), # Sample rate
+            #     "-c", "1",             # Channels
+            #     new
+            # ]
+
+            # ffmpeg_process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE)
+            # sox_process = subprocess.Popen(sox_command, stdin=ffmpeg_process.stdout)
+
+            # sox_process.communicate()  # Wait for SoX process to complete
+
+            # ffmpeg_process.stdout.close()
+            # sox_process.wait()
+
+            # subprocess.run(["/usr/bin/ffmpeg", 
+            #                 "-hide_banner", "-loglevel", "error", 
+            #                 "-i", f,
+            #                 "-ar", str(self.ml.sr), "-ac", "1", '-acodec', 'pcm_s16le',
+            #                 new])
             
-            if self.ml.name == "encodec":
-                import torchaudio
-                from encodec.utils import convert_audio
+            # Actually the pipe is not a good idea
+            subprocess.run(["/ws/sox-14.4.2/src/sox", f,
+                "-r", str(self.ml.sr),
+                "-c", "1",
+                "-b", "16",
+                new])
 
-                wav, sr = torchaudio.load(new)
-                wav = convert_audio(wav, sr, self.ml.sr, self.ml.model.channels)
+        if self.ml.name == "encodec":
+            import torchaudio
+            from encodec.utils import convert_audio
 
-                # If it's longer than 3 minutes, cut it
-                if wav.shape[1] > 3 * 60 * self.ml.sr:
-                    wav = wav[:, :3 * 60 * self.ml.sr]
-                    
-                return wav.unsqueeze(0)
+            wav, sr = torchaudio.load(new)
+            wav = convert_audio(wav, sr, self.ml.sr, self.ml.model.channels)
 
-            wav_data, _ = sf.read(new, dtype='int16')
-            wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
+            # If it's longer than 3 minutes, cut it
+            if wav.shape[1] > 3 * 60 * self.ml.sr:
+                wav = wav[:, :3 * 60 * self.ml.sr]
+                
+            return wav.unsqueeze(0)
 
-            return wav_data
+        wav_data, _ = sf.read(new, dtype='int16')
+        wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
+
+        return wav_data
 
     def cache_embedding_file(self, audio_dir: str | Path) -> np.ndarray:
         """
