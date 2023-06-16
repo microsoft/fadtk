@@ -90,29 +90,30 @@ class FrechetAudioDistance:
         new = (cache_dir / f.name).with_suffix(".wav")
 
         if not new.exists():
+            sox_args = ['-r', str(self.ml.sr), '-c', '1', '-b', '16']
             cache_dir.mkdir(parents=True, exist_ok=True)
 
             # ffmpeg has bad resampling compared to SoX
             # SoX has bad format support compared to ffmpeg
+            # If the file format is not supported by SoX, use ffmpeg to convert it to wav
 
-            # Use ffmpeg for format conversion and then pipe to sox for resampling
-            with tempfile.TemporaryDirectory() as tmp:
-                tmp = Path(tmp) / 'temp.wav'
+            if f.suffix[1:] not in self.sox_formats:
+                # Use ffmpeg for format conversion and then pipe to sox for resampling
+                with tempfile.TemporaryDirectory() as tmp:
+                    tmp = Path(tmp) / 'temp.wav'
 
-                # Open ffmpeg process for format conversion
-                subprocess.run([
-                    "/usr/bin/ffmpeg", 
-                    "-hide_banner", "-loglevel", "error", 
-                    "-i", f,
-                    "-acodec", "pcm_s16le",
-                    tmp])
-                
-                # Open sox process for resampling, taking input from ffmpeg's output
-                subprocess.run([
-                    self.sox_path, tmp,
-                    "-r", str(self.ml.sr),
-                    "-c", "1",
-                    "-b", "16", new])
+                    # Open ffmpeg process for format conversion
+                    subprocess.run([
+                        "/usr/bin/ffmpeg", 
+                        "-hide_banner", "-loglevel", "error", 
+                        "-i", f, tmp])
+                    
+                    # Open sox process for resampling, taking input from ffmpeg's output
+                    subprocess.run([self.sox_path, tmp, *sox_args, new])
+                    
+            else:
+                # Use sox for resampling
+                subprocess.run([self.sox_path, f, *sox_args, new])
 
         return self.ml.load_wav(new)
 
