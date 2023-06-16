@@ -89,13 +89,11 @@ class PANNModel(ModelLoader):
             out = self.model(torch.tensor(audio).float().unsqueeze(0).to(self.device), None)
             return out['embedding'].data[0]
 
-class EncodecModel(ModelLoader):
-    """
-    Encodec model from https://github.com/facebookresearch/encodec
-    """
-    def __init__(self):
-        super().__init__("encodec")
 
+class EncodecBaseModel(ModelLoader):
+    def __init__(self, name: str):
+        super().__init__(name)
+    
     def load_model(self):
         from encodec import EncodecModel
         self.model = EncodecModel.encodec_model_24khz()
@@ -118,6 +116,17 @@ class EncodecModel(ModelLoader):
             wav = wav[:, :3 * 60 * self.sr]
 
         return wav.unsqueeze(0)
+
+
+class EncodecQuantModel(EncodecBaseModel):
+    """
+    Encodec model from https://github.com/facebookresearch/encodec
+
+    This version uses the quantized outputs (discrete values of n quantizers).
+    """
+    def __init__(self):
+        super().__init__("encodec")
+
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             frames = self.model.encode(audio.to(self.device))
@@ -128,8 +137,30 @@ class EncodecModel(ModelLoader):
             # print(frames.shape) # [n_quantizers, timeframes]
             frames = frames.transpose(0, 1)
             # print(frames.shape) # [timeframes, n_quantizers]
-        return frames
-    
+            return frames
+
+
+class EncodecEmbModel(EncodecBaseModel):
+    """
+    Encodec model from https://github.com/facebookresearch/encodec
+
+    Thiss version uses the embedding outputs (continuous values of 128 features).
+    """
+    def __init__(self):
+        super().__init__("encodec-emb")
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        with torch.no_grad():
+            length = audio.shape[-1]
+            duration = length / self.sr
+            assert self.model.segment is None or duration <= 1e-5 + self.model.segment
+
+            emb = self.model.encoder(audio.to(self.device)) # [1, 128, timeframes]
+            emb = emb[0] # [128, timeframes]
+            emb = emb.transpose(0, 1) # [timeframes, 128]
+            return emb
+
+
 class MERTModel(ModelLoader):
     """
     MERT model from https://huggingface.co/m-a-p/MERT-v1-330M
