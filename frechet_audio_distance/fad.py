@@ -19,9 +19,18 @@ import soundfile as sf
 from pathlib import Path
 from hypy_utils import write
 from hypy_utils.tqdm_utils import tq, pmap, tmap, smap
+from hypy_utils.nlp_utils import substr_between
 
 from .models.pann import Cnn14_16k
 from .model_loader import ModelLoader
+
+
+def find_sox_formats(sox_path: str) -> list[str]:
+    """
+    Find a list of file formats supported by SoX
+    """
+    out = subprocess.check_output((sox_path, "-h")).decode()
+    return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
 
 
 def _cache_embedding_batch(args):
@@ -68,6 +77,7 @@ class FrechetAudioDistance:
         self.verbose = verbose
         self.audio_load_worker = audio_load_worker
         self.sox_path = sox_path
+        self.sox_formats = find_sox_formats(sox_path)
 
         # Disable gradient calculation because we're not training
         torch.autograd.set_grad_enabled(False)
