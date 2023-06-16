@@ -93,36 +93,28 @@ class FrechetAudioDistance:
             cache_dir.mkdir(parents=True, exist_ok=True)
 
             # ffmpeg has bad resampling compared to SoX
+            # SoX has bad format support compared to ffmpeg
 
-            # subprocess.run(["/usr/bin/ffmpeg", 
-            #                 "-hide_banner", "-loglevel", "error", 
-            #                 "-i", f,
-            #                 "-ar", str(self.ml.sr), "-ac", "1", '-acodec', 'pcm_s16le',
-            #                 new])
-            
-            subprocess.run([self.sox_path, f,
-                "-r", str(self.ml.sr),
-                "-c", "1",
-                "-b", "16",
-                new])
+            # Use ffmpeg for format conversion and then pipe to sox for resampling
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp) / 'temp.wav'
 
-        if self.ml.name == "encodec":
-            import torchaudio
-            from encodec.utils import convert_audio
-
-            wav, sr = torchaudio.load(new)
-            wav = convert_audio(wav, sr, self.ml.sr, self.ml.model.channels)
-
-            # If it's longer than 3 minutes, cut it
-            if wav.shape[1] > 3 * 60 * self.ml.sr:
-                wav = wav[:, :3 * 60 * self.ml.sr]
+                # Open ffmpeg process for format conversion
+                subprocess.run([
+                    "/usr/bin/ffmpeg", 
+                    "-hide_banner", "-loglevel", "error", 
+                    "-i", f,
+                    "-acodec", "pcm_s16le",
+                    tmp])
                 
-            return wav.unsqueeze(0)
+                # Open sox process for resampling, taking input from ffmpeg's output
+                subprocess.run([
+                    self.sox_path, tmp,
+                    "-r", str(self.ml.sr),
+                    "-c", "1",
+                    "-b", "16", new])
 
-        wav_data, _ = sf.read(new, dtype='int16')
-        wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
-
-        return wav_data
+        return self.ml.load_wav(new)
 
     def cache_embedding_file(self, audio_dir: str | Path) -> np.ndarray:
         """
