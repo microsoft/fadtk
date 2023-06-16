@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 import os
 import numpy as np
+import soundfile
 
 import torch
 from torch import nn
+from pathlib import Path
 
 from .models.pann import Cnn14_16k
 
@@ -30,6 +32,16 @@ class ModelLoader(ABC):
     def _get_embedding(self, audio: np.ndarray):
         pass
 
+    @abstractmethod
+    def load_wav(self, wav_file: Path):
+        wav_data, _ = soundfile.read(wav_file, dtype='int16')
+        wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
+
+        # print(wav_data.shape, np.mean(wav_data), np.std(wav_data))
+
+        return wav_data
+
+
 class VGGishModel(ModelLoader):
     """
     S. Hershey et al., "CNN Architectures for Large-Scale Audio Classification", ICASSP 2017
@@ -51,6 +63,7 @@ class VGGishModel(ModelLoader):
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         return self.model.forward(audio, self.sr)
+
 
 class PANNModel(ModelLoader):
     """
@@ -90,6 +103,21 @@ class EncodecModel(ModelLoader):
         self.model.set_target_bandwidth(12)
         self.model.to(self.device)
 
+    
+    def load_wav(self, wav_file: Path):
+        import torchaudio
+        from encodec.utils import convert_audio
+
+        wav, sr = torchaudio.load(wav_file)
+        wav = convert_audio(wav, sr, self.sr, self.model.channels)
+
+        # print(wav.shape, torch.mean(wav), torch.std(wav))
+
+        # If it's longer than 3 minutes, cut it
+        if wav.shape[1] > 3 * 60 * self.sr:
+            wav = wav[:, :3 * 60 * self.sr]
+
+        return wav.unsqueeze(0)
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             frames = self.model.encode(audio.to(self.device))
