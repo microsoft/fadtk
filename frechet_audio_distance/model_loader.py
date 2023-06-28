@@ -30,9 +30,11 @@ class ModelLoader(ABC):
 
     @abstractmethod
     def _get_embedding(self, audio: np.ndarray):
+        """
+        Returns the embedding of the audio file. The resulting vector should be of shape (n_frames, n_features).
+        """
         pass
 
-    @abstractmethod
     def load_wav(self, wav_file: Path):
         wav_data, _ = soundfile.read(wav_file, dtype='int16')
         wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
@@ -73,7 +75,6 @@ class PANNModel(ModelLoader):
         super().__init__("pann")
 
     def load_model(self):
-        print(torch.hub.get_dir())
         model_path = os.path.join(torch.hub.get_dir(), "PANNs-FAD.pth")
         if not(os.path.exists(model_path)):
             torch.hub.download_url_to_file('https://zenodo.org/record/3987831/files/Cnn14_16k_mAP%3D0.438.pth', dst=model_path, progress=True)
@@ -87,7 +88,9 @@ class PANNModel(ModelLoader):
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             out = self.model(torch.tensor(audio).float().unsqueeze(0).to(self.device), None)
-            return out['embedding'].data[0]
+            d = out['embedding'].data
+            print(d.shape)
+            return d
 
 
 class EncodecBaseModel(ModelLoader):
