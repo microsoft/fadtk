@@ -277,7 +277,7 @@ class FrechetAudioDistance:
             
         except Exception as e:
             print("[Frechet Audio Distance] exception thrown, {}".format(str(e)))
-            raise e            raise e
+            raise e
         
     def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, max_idx = -1):
         """
@@ -352,3 +352,44 @@ class FrechetAudioDistance:
     
     def find_z_songs(self, background_dir, eval_dir, csv_name: str, n: int = 10):
         """
+        Find songs with the minimum or maximum z scores.
+        """
+        csv = Path('data/fad-best-worst') / self.ml.name / csv_name
+        if csv.exists():
+            print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
+            return
+
+        # 1. Load background embeddings
+        embds_background = self.get_embeddings_files(background_dir)
+        mu, cov = self.calculate_embd_statistics(embds_background)
+        
+        # 2. For each eval file, load it
+        eval_dir = Path(eval_dir)
+
+        # List valid audio files
+        _files = [eval_dir / f for f in os.listdir(eval_dir)]
+        _files = [f for f in _files if f.is_file()]
+
+        def z(f):
+            # Calculate z score
+            z = self.cache_z_score_file(f)
+            
+            # Calculate mean abs z score
+            return np.mean(np.abs(z))
+        
+        # 3. Calculate z score for each eval file
+        # z_scores = tmap(z, _files, disable=(not self.verbose), desc="Calculating z scores...", max_workers=self.audio_load_worker)
+        z_scores = smap(z, _files, desc="Calculating z scores...")
+        z_scores = np.array(z_scores)
+
+        # 4. Find best and worst songs. Best songs are the songs with z-scores closest to 0, worst songs are the songs with z-scores furthest from 0.
+        # sorted_idx = np.argsort(np.abs(z_scores))
+        # best_idx = sorted_idx[:n]
+        # worst_idx = sorted_idx[-n:]
+
+        # Write the sorted z scores to csv
+        pairs = list(zip(_files, z_scores))
+        pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
+        write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
+ 
+        # return _files[best_idx], _files[worst_idx]
