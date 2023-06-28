@@ -176,6 +176,30 @@ class FrechetAudioDistance:
 
         return z_scores
 
+    def cache_z_score_file(self, audio_dir: str | Path) -> np.ndarray:
+        """
+        Compute z-score for an audio file and cache it to a file.
+        """
+        cache = Path(audio_dir).parent / "z_scores" / self.ml.name / Path(audio_dir).with_suffix(".npy").name
+
+        if cache.exists():
+            return np.load(cache)
+
+        # Load embedding
+        embd = self.cache_embedding_file(audio_dir)
+
+        # Calculate statistics
+        mu, cov = self.calculate_embd_statistics(embd)
+
+        # Calculate z-score
+        z_scores = self.calculate_z_score_song(embd, mu, cov)
+
+        # Cache z-score
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        np.save(cache, z_scores)
+
+        return z_scores
+
     def calculate_frechet_distance(self, mu1, cov1, mu2, cov2, eps=1e-6):
         """
         Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
