@@ -139,12 +139,15 @@ class FrechetAudioDistance:
 
         return embd
     
-    def calculate_embd_statistics(self, embd_lst):
+    def calculate_embd_statistics(self, embd_lst: list | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate the mean and covariance matrix of a list of embeddings.
+        """
         if isinstance(embd_lst, list):
             embd_lst = np.array(embd_lst)
         mu = np.mean(embd_lst, axis=0)
-        sigma = np.cov(embd_lst, rowvar=False)
-        return mu, sigma
+        cov = np.cov(embd_lst, rowvar=False)
+        return mu, cov
     
     def calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
         """
@@ -161,8 +164,8 @@ class FrechetAudioDistance:
                 for generated samples.
         -- mu2   : The sample mean over activations, precalculated on an
                 representative data set.
-        -- sigma1: The covariance matrix over activations for generated samples.
-        -- sigma2: The covariance matrix over activations, precalculated on an
+        -- cov1: The covariance matrix over activations for generated samples.
+        -- cov2: The covariance matrix over activations, precalculated on an
                 representative data set.
         Returns:
         --   : The Frechet Distance.
@@ -171,24 +174,24 @@ class FrechetAudioDistance:
         mu1 = np.atleast_1d(mu1)
         mu2 = np.atleast_1d(mu2)
 
-        sigma1 = np.atleast_2d(sigma1)
-        sigma2 = np.atleast_2d(sigma2)
+        cov1 = np.atleast_2d(cov1)
+        cov2 = np.atleast_2d(cov2)
 
         assert mu1.shape == mu2.shape, \
             'Training and test mean vectors have different lengths'
-        assert sigma1.shape == sigma2.shape, \
+        assert cov1.shape == cov2.shape, \
             'Training and test covariances have different dimensions'
 
         diff = mu1 - mu2
 
         # Product might be almost singular
-        covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+        covmean, _ = linalg.sqrtm(cov1.dot(cov2), disp=False)
         if not np.isfinite(covmean).all():
             msg = ('fid calculation produces singular product; '
                 'adding %s to diagonal of cov estimates') % eps
             print(msg)
-            offset = np.eye(sigma1.shape[0]) * eps
-            covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+            offset = np.eye(cov1.shape[0]) * eps
+            covmean = linalg.sqrtm((cov1 + offset).dot(cov2 + offset))
 
         # Numerical error might give slight imaginary component
         if np.iscomplexobj(covmean):
@@ -199,8 +202,8 @@ class FrechetAudioDistance:
 
         tr_covmean = np.trace(covmean)
 
-        return (diff.dot(diff) + np.trace(sigma1)
-                + np.trace(sigma2) - 2 * tr_covmean)
+        return (diff.dot(diff) + np.trace(cov1)
+                + np.trace(cov2) - 2 * tr_covmean)
     
     def get_embeddings_files(self, dir: str | Path):
         """
@@ -233,14 +236,14 @@ class FrechetAudioDistance:
                 print("[Frechet Audio Distance] background or eval set is empty, exitting...")
                 return -1
             
-            mu_background, sigma_background = self.calculate_embd_statistics(embds_background)
-            mu_eval, sigma_eval = self.calculate_embd_statistics(embds_eval)
+            mu_background, cov_background = self.calculate_embd_statistics(embds_background)
+            mu_eval, cov_eval = self.calculate_embd_statistics(embds_eval)
 
             fad_score = self.calculate_frechet_distance(
                 mu_background, 
-                sigma_background, 
+                cov_background, 
                 mu_eval, 
-                sigma_eval
+                cov_eval
             )
 
             return fad_score
