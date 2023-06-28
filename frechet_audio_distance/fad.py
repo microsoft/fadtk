@@ -149,7 +149,34 @@ class FrechetAudioDistance:
         cov = np.cov(embd_lst, rowvar=False)
         return mu, cov
     
-    def calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
+    def calculate_z_score_song(self, embds: np.ndarray, mu: np.ndarray, cov: np.ndarray) -> np.ndarray:
+        """
+        Calculate the z-score of a song.
+
+        :param mu: The mean embedding vector (size: (#features))
+        :param cov: The covariance matrix (size: (#features, #features))
+        :param embds: The song embedding matrix (size: (#frames, #features))
+        :returns: The z-score matrix (size: (#frames, #features))
+        """
+        assert len(mu.shape) == 1, f"mu should be a 1D vector, is {mu.shape}"
+        assert len(cov.shape) == 2, f"cov should be a 2D matrix, is {cov.shape}"
+        assert cov.shape[0] == cov.shape[1], f"cov should be a square matrix, is {cov.shape}"
+        assert len(embds.shape) == 2, f"embds should be a 2D matrix, is {embds.shape}"
+        assert mu.shape[0] == cov.shape[0] == embds.shape[1], f"the size of the second dimension of embds should match the size of mu and the dimensions of cov, is {mu.shape}, {cov.shape}, {embds.shape}"
+
+        # Compute the standard deviation for each feature.
+        # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
+        sigma = np.sqrt(np.diagonal(cov))
+
+        # Make sure to add a small constant to the denominator to avoid division by zero.
+        sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
+
+        # Subtract the mean from the embeddings and divide by the standard deviation.
+        z_scores = (embds - mu) / sigma
+
+        return z_scores
+
+    def calculate_frechet_distance(self, mu1, cov1, mu2, cov2, eps=1e-6):
         """
         Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
         
