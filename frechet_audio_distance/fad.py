@@ -176,30 +176,6 @@ class FrechetAudioDistance:
 
         return z_scores
 
-    def cache_z_score_file(self, audio_dir: str | Path) -> np.ndarray:
-        """
-        Compute z-score for an audio file and cache it to a file.
-        """
-        cache = Path(audio_dir).parent / "z_scores" / self.ml.name / Path(audio_dir).with_suffix(".npy").name
-
-        if cache.exists():
-            return np.load(cache)
-
-        # Load embedding
-        embd = self.cache_embedding_file(audio_dir)
-
-        # Calculate statistics
-        mu, cov = self.calculate_embd_statistics(embd)
-
-        # Calculate z-score
-        z_scores = self.calculate_z_score_song(embd, mu, cov)
-
-        # Cache z-score
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        np.save(cache, z_scores)
-
-        return z_scores
-
     def calculate_frechet_distance(self, mu1, cov1, mu2, cov2, eps=1e-6):
         """
         Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
@@ -303,7 +279,7 @@ class FrechetAudioDistance:
             print("[Frechet Audio Distance] exception thrown, {}".format(str(e)))
             raise e
         
-    def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, max_idx = -1):
+    def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, min_inv = 0.001, max_idx = -1):
         """
         Calculate FAD for different n (number of samples) from the eval set.
 
@@ -313,9 +289,10 @@ class FrechetAudioDistance:
         :param per_n: if True, use equally distance n, otherwise use equally distance 1/n
         :param steps: number of steps to use
         :param per_song: if True, n means number of songs, otherwise n means number of feature frames
+        :param min_inv: minimum 1/n to use
         :param max_idx: maximum feature frame index of the eval set to use, -1 means use all
         """
-        csv = Path('data/fad') / self.ml.name / ('n-songs' if per_song else 'n-frames') / ('per-n' if per_n else 'per-ninv') / csv_name
+        csv = Path('data/fad') / str(min_inv) / self.ml.name / ('n-songs' if per_song else 'n-frames') / ('per-n' if per_n else 'per-ninv') / csv_name
         if csv.exists():
             print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
             return
@@ -342,8 +319,6 @@ class FrechetAudioDistance:
             max_n = len(embeds)
         else:
             max_n = sum(len(embed) for embed in embeds)
-
-        min_inv = 0.0002
 
         # Generate list of ns to use
         if per_n:
@@ -378,7 +353,7 @@ class FrechetAudioDistance:
         """
         Find songs with the minimum or maximum z scores.
         """
-        csv = Path('data/fad-best-worst') / self.ml.name / csv_name
+        csv = Path('data/fad-z') / self.ml.name / csv_name
         if csv.exists():
             print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
             return
@@ -395,15 +370,18 @@ class FrechetAudioDistance:
         _files = [f for f in _files if f.is_file()]
 
         def z(f):
-            # Calculate z score
-            z = self.cache_z_score_file(f)
+            # Load embedding
+            embd = self.cache_embedding_file(f)
+
+            # Calculate z-score
+            zs = self.calculate_z_score_song(embd, mu, cov)
             
             # Calculate mean abs z score
-            return np.mean(np.abs(z))
+            return np.mean(np.abs(zs))
         
         # 3. Calculate z score for each eval file
-        # z_scores = tmap(z, _files, disable=(not self.verbose), desc="Calculating z scores...", max_workers=self.audio_load_worker)
-        z_scores = smap(z, _files, desc="Calculating z scores...")
+        z_scores = tmap(z, _files, disable=(not self.verbose), desc="Calculating z scores...", max_workers=self.audio_load_worker)
+        # z_scores = smap(z, _files, desc="Calculating z scores...")
         z_scores = np.array(z_scores)
 
         # 4. Find best and worst songs. Best songs are the songs with z-scores closest to 0, worst songs are the songs with z-scores furthest from 0.
