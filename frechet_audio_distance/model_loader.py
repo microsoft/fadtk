@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
 import os
+from typing import Literal
 import numpy as np
+import requests
 import soundfile
 
 import torch
+import librosa
 from torch import nn
 from pathlib import Path
+from hypy_utils.downloader import download_file
 
 from .models.pann import Cnn14_16k
 
@@ -190,4 +194,70 @@ class MERTModel(ModelLoader):
         # print(out[-1].shape) # [timeframes, 768]
 
         return out[-1]
-        
+    
+
+class CLAPLaionModel(ModelLoader):
+    """
+    CLAP model from https://github.com/LAION-AI/CLAP
+    """
+    def __init__(self, type: Literal['audio', 'music']):
+        super().__init__(f"clap-laion-{type}")
+        self.type = type
+
+        if type == 'audio':
+            url = 'https://huggingface.co/lukewys/laion_clap/resolve/main/630k-audioset-best.pt'
+        elif type == 'music':
+            url = 'https://huggingface.co/lukewys/laion_clap/resolve/main/music_audioset_epoch_15_esc_90.14.pt'
+
+        self.model_file = Path(__file__).parent / ".model-checkpoints" / url.split('/')[-1]
+
+        # Download file if it doesn't exist
+        if not self.model_file.exists():
+            self.model_file.parent.mkdir(parents=True, exist_ok=True)
+            download_file(url, self.model_file)
+
+    def load_model(self):
+        import laion_clap
+
+        self.model = laion_clap.CLAP_Module(enable_fusion=False)
+        self.model.load_ckpt(self.model_file)
+        self.sr = 48000
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        audio = audio.reshape(1, -1)
+
+        # The int16-float32 conversion is used for quantization
+        audio = self.int16_to_float32(self.float32_to_int16(audio))
+
+        # Split the audio into 10s chunks with 1s hop
+        chunk_size = 10 * self.sr  # 10 seconds
+        hop_size = self.sr  # 1 second
+        chunks = [audio[:, i:i+chunk_size] for i in range(0, audio.shape[1], hop_size)]
+
+        # Calculate embeddings for each chunk
+        embeddings = []
+        for chunk in chunks:
+            with torch.no_grad():
+                chunk = chunk if chunk.shape[1] == chunk_size else np.pad(chunk, ((0,0), (0, chunk_size-chunk.shape[1])))
+                chunk = torch.from_numpy(chunk).float().to(self.device)
+                emb = self.model.get_audio_embedding_from_data(x = chunk, use_tensor=True)
+                embeddings.append(emb)
+
+        # Concatenate the embeddings
+        emb = torch.cat(embeddings, dim=0)
+
+        print(emb.shape) # [timeframes, 512]
+        return emb
+
+    def int16_to_float32(self, x):
+        return (x / 32767.0).astype(np.float32)
+
+    def float32_to_int16(self, x):
+        x = np.clip(x, a_min=-1., a_max=1.)
+        return (x * 32767.).astype(np.int16)
+
+    def load_wav(self, wav_file: Path):
+        wav_data, _ = librosa.load(wav_file, sr=self.sr)
+        return wav_data
+
