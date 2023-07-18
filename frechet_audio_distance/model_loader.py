@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import math
 import os
 from typing import Literal
 import numpy as np
@@ -95,17 +96,26 @@ class PANNModel(ModelLoader):
             d = out['embedding'].data
             print(d.shape)
             return d
+        
+
+ENCODEC_DEFAULT_VARIANT = '48k'
 
 
 class EncodecBaseModel(ModelLoader):
-    def __init__(self, name: str):
-        super().__init__(name)
+    def __init__(self, name: str, variant: Literal['48k', '24k'] = ENCODEC_DEFAULT_VARIANT):
+        super().__init__(name if variant == '24k' else f"{name}-{variant}")
+        self.variant = variant
     
     def load_model(self):
         from encodec import EncodecModel
-        self.model = EncodecModel.encodec_model_24khz()
-        self.sr = 24000
-        self.model.set_target_bandwidth(12)
+        if self.variant == '48k':
+            self.model = EncodecModel.encodec_model_48khz()
+            self.sr = 48000
+            self.model.set_target_bandwidth(24)
+        else:
+            self.model = EncodecModel.encodec_model_24khz()
+            self.sr = 24000
+            self.model.set_target_bandwidth(12)
         self.model.to(self.device)
 
     
@@ -132,7 +142,7 @@ class EncodecQuantModel(EncodecBaseModel):
     This version uses the quantized outputs (discrete values of n quantizers).
     """
     def __init__(self):
-        super().__init__("encodec")
+        super().__init__("encodec", '24k')
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
@@ -153,14 +163,38 @@ class EncodecEmbModel(EncodecBaseModel):
 
     Thiss version uses the embedding outputs (continuous values of 128 features).
     """
-    def __init__(self):
-        super().__init__("encodec-emb")
+    def __init__(self, variant: Literal['48k', '24k'] = '48k'):
+        super().__init__("encodec-emb", variant)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        segment_length = self.model.segment_length
+        
+        # The 24k model doesn't use segmenting
+        if segment_length is None:
+            return self._get_frame(audio)
+        
+        # The 48k model uses segmenting
+        assert audio.dim() == 3
+        _, channels, length = audio.shape
+        assert channels > 0 and channels <= 2
+        stride = segment_length
+
+        encoded_frames: list[torch.Tensor] = []
+        for offset in range(0, length, stride):
+            frame = audio[:, :, offset:offset + segment_length]
+            encoded_frames.append(self._get_frame(frame))
+
+        # Concatenate
+        encoded_frames = torch.cat(encoded_frames, dim=0)
+        # print(encoded_frames.shape) # [timeframes, 128]
+        return encoded_frames
+                
+
+    def _get_frame(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             length = audio.shape[-1]
             duration = length / self.sr
-            assert self.model.segment is None or duration <= 1e-5 + self.model.segment
+            assert self.model.segment is None or duration <= 1e-5 + self.model.segment, f"Audio is too long ({duration} > {self.model.segment})"
 
             emb = self.model.encoder(audio.to(self.device)) # [1, 128, timeframes]
             emb = emb[0] # [128, timeframes]
