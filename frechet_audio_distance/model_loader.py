@@ -11,6 +11,7 @@ import librosa
 from torch import nn
 from pathlib import Path
 from hypy_utils.downloader import download_file
+from audiotools import AudioSignal
 
 from .models.pann import Cnn14_16k
 
@@ -202,6 +203,72 @@ class EncodecEmbModel(EncodecBaseModel):
             return emb
 
 
+class DACModel(ModelLoader):
+    """
+    DAC model from https://github.com/descriptinc/descript-audio-codec
+
+    pip install descript-audio-codec
+    """
+    def __init__(self):
+        super().__init__("dac-44kHz")
+
+    def load_model(self):
+        from dac.utils import load_model
+        self.model = load_model(tag='latest', model_type='44khz')
+        self.sr = 44100
+        self.model.eval()
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        import time
+
+        # Set variables
+        win_len = 5.0
+        overlap_hop_ratio = 0.5
+
+        # Fix overlap window so that it's divisible by 4 in # of samples
+        win_len = ((win_len * self.sr) // 4) * 4
+        win_len = win_len / self.sr
+        hop_len = win_len * overlap_hop_ratio
+
+        stime = time.time()
+
+        # Sanitize input
+        audio.normalize(-16)
+        audio.ensure_max_of_audio()
+
+        nb, nac, nt = audio.audio_data.shape
+        audio.audio_data = audio.audio_data.reshape(nb * nac, 1, nt)
+
+        pad_length = math.ceil(audio.signal_duration / win_len) * win_len
+        audio.zero_pad_to(int(pad_length * self.sr))
+        audio = audio.collect_windows(win_len, hop_len)
+
+        print(win_len, hop_len, audio.batch_size, f"(processed in {(time.time() - stime) * 1000:.0f}ms)")
+        stime = time.time()
+
+        emb = []
+        for i in range(audio.batch_size):
+            signal_from_batch = AudioSignal(audio.audio_data[i, ...], self.sr)
+            signal_from_batch.to(self.device)
+            e1 = self.model.encoder(signal_from_batch.audio_data).cpu() # [1, 1024, timeframes]
+            # print(e1.shape)
+            e1 = e1[0] # [1024, timeframes]
+            # print(e1.shape)
+            e1 = e1.transpose(0, 1) # [timeframes, 1024]
+            # print(e1.shape)
+            emb.append(e1)
+
+        emb = torch.cat(emb, dim=0)
+        print(emb.shape, f'(computing finished in {(time.time() - stime) * 1000:.0f}ms)')
+
+        return emb
+
+    def load_wav(self, wav_file: Path):
+        audio = AudioSignal(wav_file)
+        return audio
+
+
 class MERTModel(ModelLoader):
     """
     MERT model from https://huggingface.co/m-a-p/MERT-v1-330M
@@ -294,4 +361,37 @@ class CLAPLaionModel(ModelLoader):
     def load_wav(self, wav_file: Path):
         wav_data, _ = librosa.load(wav_file, sr=self.sr)
         return wav_data
+
+
+class CdpamBase(ModelLoader):
+    def __init__(self, name: str):
+        super().__init__(name)
+
+    def load_model(self):
+        from cdpam import CDPAM
+        self.model = CDPAM()
+        self.sr = 22050
+        self.model.to(self.device)
+    
+    def load_wav(self, wav_file: Path):
+        x, _  = librosa.load(wav_file, sr=22050)
+        
+        # Convert to 16 bit floating point
+        x = np.round(x.astype(np.float) * 32768)
+        x  = np.reshape(x, [-1, 1])
+        x = np.reshape(x, [1, x.shape[0]])
+        x  = np.float32(x)
+        
+        return x
+
+
+class CdpamAcoustic(CdpamBase):
+    def __init__(self) -> None:
+        super().__init__("cdpam-acoustic")
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        _, a, _ = self.model.model.base_encoder.forward(audio.unsqueeze(1))
+        print(a.shape)
+        
+        return a
 
