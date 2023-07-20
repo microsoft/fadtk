@@ -149,27 +149,19 @@ class FrechetAudioDistance:
         cov = np.cov(embd_lst, rowvar=False)
         return mu, cov
     
-    def calculate_z_score_song(self, embds: np.ndarray, mu: np.ndarray, cov: np.ndarray) -> np.ndarray:
+    def calculate_z_score_song(self, embds: np.ndarray, mu: np.ndarray, sigma: np.ndarray) -> np.ndarray:
         """
         Calculate the z-score of a song.
 
         :param mu: The mean embedding vector (size: (#features))
-        :param cov: The covariance matrix (size: (#features, #features))
+        :param sigma: The standard deviation embedding vector (size: (#features))
         :param embds: The song embedding matrix (size: (#frames, #features))
         :returns: The z-score matrix (size: (#frames, #features))
         """
         assert len(mu.shape) == 1, f"mu should be a 1D vector, is {mu.shape}"
-        assert len(cov.shape) == 2, f"cov should be a 2D matrix, is {cov.shape}"
-        assert cov.shape[0] == cov.shape[1], f"cov should be a square matrix, is {cov.shape}"
         assert len(embds.shape) == 2, f"embds should be a 2D matrix, is {embds.shape}"
-        assert mu.shape[0] == cov.shape[0] == embds.shape[1], f"the size of the second dimension of embds should match the size of mu and the dimensions of cov, is {mu.shape}, {cov.shape}, {embds.shape}"
-
-        # Compute the standard deviation for each feature.
-        # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
-        sigma = np.sqrt(np.diagonal(cov))
-
-        # Make sure to add a small constant to the denominator to avoid division by zero.
-        sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
+        assert len(sigma.shape) == 1, f"sigma should be a 1D vector, is {sigma.shape}"
+        assert mu.shape[0] == embds.shape[1], f"mu and embds should have the same number of features, is {mu.shape[0]} and {embds.shape[1]}"
 
         # Subtract the mean from the embeddings and divide by the standard deviation.
         z_scores = (embds - mu) / sigma
@@ -256,14 +248,11 @@ class FrechetAudioDistance:
 
     def score(self, background_dir, eval_dir):
         try:
-            embds_background = self.get_embeddings_files(background_dir)
-            embds_eval = self.get_embeddings_files(eval_dir)
-
-            if len(embds_background) == 0 or len(embds_eval) == 0:
-                print("[Frechet Audio Distance] background or eval set is empty, exitting...")
-                return -1
+            mu_background, cov_background = self.load_background(background_dir)
             
-            mu_background, cov_background = self.calculate_embd_statistics(embds_background)
+            embds_eval = self.get_embeddings_files(eval_dir)
+            assert len(embds_eval) != 0, "Background or eval set is empty."
+            
             mu_eval, cov_eval = self.calculate_embd_statistics(embds_eval)
 
             fad_score = self.calculate_frechet_distance(
@@ -279,7 +268,16 @@ class FrechetAudioDistance:
             print("[Frechet Audio Distance] exception thrown, {}".format(str(e)))
             raise e
         
-    def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, min_inv = 0.001, max_idx = -1):
+    def load_background(self, background_dir):
+        print(f"Loading background files from {background_dir}...")
+        embds_background = self.get_embeddings_files(background_dir)
+        print(f"Background shape {embds_background.shape}, calculating statistics...")
+        mu, cov = self.calculate_embd_statistics(embds_background)
+        del embds_background
+        print("Background statistics calculated.")
+        return mu, cov
+
+    def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, min_inv = 0.0002, max_idx = -1):
         """
         Calculate FAD for different n (number of samples) from the eval set.
 
@@ -297,8 +295,8 @@ class FrechetAudioDistance:
             print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
             return
 
-        embds_background = self.get_embeddings_files(background_dir)
-        print(f"Background shape {embds_background.shape}")
+        # 1. Load background embeddings
+        mu_background, cov_background = self.load_background(background_dir)
         
         eval_dir = Path(eval_dir)
 
@@ -338,7 +336,6 @@ class FrechetAudioDistance:
 
             print(f"Selected eval shape {embds_eval.shape}")
             
-            mu_background, cov_background = self.calculate_embd_statistics(embds_background)
             mu_eval, cov_eval = self.calculate_embd_statistics(embds_eval)
 
             fad_score = self.calculate_frechet_distance(mu_background, cov_background, mu_eval, cov_eval)
@@ -349,49 +346,51 @@ class FrechetAudioDistance:
             # Write results to csv
             write(csv, "\n".join([",".join([str(x) for x in row]) for row in results]))
     
-    def find_z_songs(self, background_dir, eval_dir, csv_name: str, n: int = 10):
+    def find_z_songs(self, background_dir, eval_dir, csv_name: str, use_fad: bool = True):
         """
         Find songs with the minimum or maximum z scores.
         """
-        csv = Path('data/fad-z') / self.ml.name / csv_name
+        csv = Path('data') / ('fad-individual' if use_fad else 'fad-z') / self.ml.name / csv_name
         if csv.exists():
             print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
             return
 
         # 1. Load background embeddings
-        embds_background = self.get_embeddings_files(background_dir)
-        mu, cov = self.calculate_embd_statistics(embds_background)
+        mu, cov = self.load_background(background_dir)
+
+        # Compute the standard deviation for each feature.
+        # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
+        sigma = np.sqrt(np.diagonal(cov))
+
+        # Make sure to add a small constant to the denominator to avoid division by zero.
+        sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
         
-        # 2. For each eval file, load it
-        eval_dir = Path(eval_dir)
-
-        # List valid audio files
-        _files = [eval_dir / f for f in os.listdir(eval_dir)]
-        _files = [f for f in _files if f.is_file()]
-
+        # 2. Define z-score function
         def z(f):
             # Load embedding
             embd = self.cache_embedding_file(f)
 
-            # Calculate z-score
-            zs = self.calculate_z_score_song(embd, mu, cov)
-            
-            # Calculate mean abs z score
-            return np.mean(np.abs(zs))
+            if use_fad:
+                # Calculate FAD
+                mu_eval, cov_eval = self.calculate_embd_statistics(embd)
+                return self.calculate_frechet_distance(mu, cov, mu_eval, cov_eval)
+
+            else:
+                # Calculate z-score
+                zs = self.calculate_z_score_song(embd, mu, sigma)
+                
+                # Calculate mean abs z score
+                return np.mean(np.abs(zs))
         
         # 3. Calculate z score for each eval file
-        z_scores = tmap(z, _files, disable=(not self.verbose), desc="Calculating z scores...", max_workers=self.audio_load_worker)
-        # z_scores = smap(z, _files, desc="Calculating z scores...")
-        z_scores = np.array(z_scores)
+        eval_dir = Path(eval_dir)
+        _files = [eval_dir / f for f in os.listdir(eval_dir)]
+        _files = [f for f in _files if f.is_file()]
 
-        # 4. Find best and worst songs. Best songs are the songs with z-scores closest to 0, worst songs are the songs with z-scores furthest from 0.
-        # sorted_idx = np.argsort(np.abs(z_scores))
-        # best_idx = sorted_idx[:n]
-        # worst_idx = sorted_idx[-n:]
+        z_scores = tmap(z, _files, desc="Calculating z scores...", max_workers=self.audio_load_worker)
+        z_scores = np.array(z_scores)
 
         # Write the sorted z scores to csv
         pairs = list(zip(_files, z_scores))
         pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
         write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
- 
-        # return _files[best_idx], _files[worst_idx]
