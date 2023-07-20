@@ -32,6 +32,11 @@ class ModelLoader(ABC):
         if self.device == torch.device('cuda'):
             embd = embd.cpu()
         embd = embd.detach().numpy()
+        
+        # If embedding is float32, convert to float16 to be space-efficient
+        if embd.dtype == np.float32:
+            embd = embd.astype(np.float16)
+
         return embd
 
     @abstractmethod
