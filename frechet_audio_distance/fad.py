@@ -10,7 +10,7 @@ import os
 import random
 import subprocess
 import tempfile
-from typing import Callable
+from typing import Callable, Literal
 import numpy as np
 import torch
 from torch import nn
@@ -148,25 +148,6 @@ class FrechetAudioDistance:
         mu = np.mean(embd_lst, axis=0)
         cov = np.cov(embd_lst, rowvar=False)
         return mu, cov
-    
-    def calculate_z_score_song(self, embds: np.ndarray, mu: np.ndarray, sigma: np.ndarray) -> np.ndarray:
-        """
-        Calculate the z-score of a song.
-
-        :param mu: The mean embedding vector (size: (#features))
-        :param sigma: The standard deviation embedding vector (size: (#features))
-        :param embds: The song embedding matrix (size: (#frames, #features))
-        :returns: The z-score matrix (size: (#frames, #features))
-        """
-        assert len(mu.shape) == 1, f"mu should be a 1D vector, is {mu.shape}"
-        assert len(embds.shape) == 2, f"embds should be a 2D matrix, is {embds.shape}"
-        assert len(sigma.shape) == 1, f"sigma should be a 1D vector, is {sigma.shape}"
-        assert mu.shape[0] == embds.shape[1], f"mu and embds should have the same number of features, is {mu.shape[0]} and {embds.shape[1]}"
-
-        # Subtract the mean from the embeddings and divide by the standard deviation.
-        z_scores = (embds - mu) / sigma
-
-        return z_scores
 
     def calculate_frechet_distance(self, mu1, cov1, mu2, cov2, eps=1e-6):
         """
@@ -197,9 +178,9 @@ class FrechetAudioDistance:
         cov2 = np.atleast_2d(cov2)
 
         assert mu1.shape == mu2.shape, \
-            'Training and test mean vectors have different lengths'
+            f'Training and test mean vectors have different lengths ({mu1.shape} vs {mu2.shape})'
         assert cov1.shape == cov2.shape, \
-            'Training and test covariances have different dimensions'
+            f'Training and test covariances have different dimensions ({cov1.shape} vs {cov2.shape})'
 
         diff = mu1 - mu2
 
@@ -224,58 +205,58 @@ class FrechetAudioDistance:
         return (diff.dot(diff) + np.trace(cov1)
                 + np.trace(cov2) - 2 * tr_covmean)
     
-    def get_embeddings_files(self, dir: str | Path):
+    def load_embeddings(self, dir: str | Path, max_count: int = -1, concat: bool = True):
         """
-        Get embeddings for all audio files in a directory.
+        Load embeddings for all audio files in a directory.
         """
         dir = Path(dir)
 
         # List valid audio files
         files = [dir / f for f in os.listdir(dir)]
         files = [f for f in files if f.is_file()]
+        print(f"Loading {len(files)} audio files from {dir}...")
 
-        if self.verbose:
-            print(f"[Frechet Audio Distance] Loading {len(files)} audio files from {dir}...")
-
-        # Map load task
-        # multiprocessing.set_start_method('spawn', force=True)
-        # with torch.multiprocessing.Pool(self.audio_load_worker) as pool:
-        #     embd_lst = pool.map(self.cache_embedding_file, files)
-        embd_lst = tmap(self.cache_embedding_file, files, disable=(not self.verbose), desc="Loading audio files...", max_workers=self.audio_load_worker)
-        # embd_lst = smap(self.cache_embedding_file, files)
-
-        return np.concatenate(embd_lst, axis=0)
-
-    def score(self, background_dir, eval_dir):
-        try:
-            mu_background, cov_background = self.load_background(background_dir)
-            
-            embds_eval = self.get_embeddings_files(eval_dir)
-            assert len(embds_eval) != 0, "Background or eval set is empty."
-            
-            mu_eval, cov_eval = self.calculate_embd_statistics(embds_eval)
-
-            fad_score = self.calculate_frechet_distance(
-                mu_background, 
-                cov_background, 
-                mu_eval, 
-                cov_eval
-            )
-
-            return fad_score
-            
-        except Exception as e:
-            print("[Frechet Audio Distance] exception thrown, {}".format(str(e)))
-            raise e
+        # Load embeddings
+        if max_count == -1:
+            embd_lst = tmap(self.cache_embedding_file, files, disable=(not self.verbose), desc="Loading audio files...", max_workers=self.audio_load_worker)
+        else:
+            total_len = 0
+            embd_lst = []
+            for f in tq(files, "Loading files"):
+                embd_lst.append(self.cache_embedding_file(f))
+                total_len += embd_lst[-1].shape[0]
+                if total_len > max_count:
+                    break
         
-    def load_background(self, background_dir):
-        print(f"Loading background files from {background_dir}...")
-        embds_background = self.get_embeddings_files(background_dir)
-        print(f"Background shape {embds_background.shape}, calculating statistics...")
+        # Concatenate embeddings if needed
+        if concat:
+            return np.concatenate(embd_lst, axis=0)
+        else:
+            return embd_lst, files
+    
+    def load_stats(self, dir: str | Path):
+        """
+        Load embedding statistics from a directory.
+        """
+        print(f"Loading embedding files from {dir}...")
+        
+        embds_background = self.load_embeddings(dir)
+        print(f"> Embeddings shape {embds_background.shape}, calculating statistics...")
+        
         mu, cov = self.calculate_embd_statistics(embds_background)
         del embds_background
-        print("Background statistics calculated.")
+        print("> Embeddings statistics calculated.")
+        
         return mu, cov
+
+    def score(self, background_dir, eval_dir):
+        """
+        Calculate a single FAD score between a background and an eval set.
+        """
+        mu_bg, cov_bg = self.load_stats(background_dir)
+        mu_eval, cov_eval = self.load_stats(eval_dir)
+
+        return self.calculate_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
 
     def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, min_inv = 0.0002, max_idx = -1):
         """
@@ -292,31 +273,20 @@ class FrechetAudioDistance:
         """
         csv = Path('data/fad') / str(min_inv) / self.ml.name / ('n-songs' if per_song else 'n-frames') / ('per-n' if per_n else 'per-ninv') / csv_name
         if csv.exists():
-            print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
+            print(f"CSV file {csv} already exists, exitting...")
             return
 
         # 1. Load background embeddings
-        mu_background, cov_background = self.load_background(background_dir)
+        mu_background, cov_background = self.load_stats(background_dir)
         
         eval_dir = Path(eval_dir)
-
-        # List valid audio files
-        _files = [eval_dir / f for f in os.listdir(eval_dir)]
-        _files = [f for f in _files if f.is_file()]
-        
-        total_len = 0
-        embeds = []
-        for f in tq(_files, "Loading eval files"):
-            embeds.append(self.cache_embedding_file(f))
-            total_len += embeds[-1].shape[0]
-            if total_len > max_idx:
-                break
+        embd_list, files = self.load_embeddings(eval_dir, max_count=max_idx, concat=False)
         
         # Calculate maximum n
         if per_song:
-            max_n = len(embeds)
+            max_n = len(embd_list)
         else:
-            max_n = sum(len(embed) for embed in embeds)
+            max_n = sum(len(embed) for embed in embd_list)
 
         # Generate list of ns to use
         if per_n:
@@ -328,11 +298,11 @@ class FrechetAudioDistance:
         for n in tq(ns, desc="Calculating FAD for different n"):
             if per_song:
                 # Select n songs randomly (with replacement)
-                embds_eval = np.concatenate(random.choices(embeds, k=n), axis=0)
+                embds_eval = np.concatenate(random.choices(embd_list, k=n), axis=0)
             else:
                 # Select n feature frames randomly (with replacement)
-                indices = np.random.choice(np.concatenate(embeds, axis=0).shape[0], size=n, replace=True)
-                embds_eval = np.concatenate(embeds, axis=0)[indices]
+                indices = np.random.choice(np.concatenate(embd_list, axis=0).shape[0], size=n, replace=True)
+                embds_eval = np.concatenate(embd_list, axis=0)[indices]
 
             print(f"Selected eval shape {embds_eval.shape}")
             
@@ -346,51 +316,80 @@ class FrechetAudioDistance:
             # Write results to csv
             write(csv, "\n".join([",".join([str(x) for x in row]) for row in results]))
     
-    def find_z_songs(self, background_dir, eval_dir, csv_name: str, use_fad: bool = True):
+    def find_z_songs(self, background_dir, eval_dir, csv_name: str, mode: Literal['z', 'individual', 'delta'] = 'delta'):
         """
         Find songs with the minimum or maximum z scores.
         """
-        csv = Path('data') / ('fad-individual' if use_fad else 'fad-z') / self.ml.name / csv_name
+        csv = Path('data') / f'fad-{mode}' / self.ml.name / csv_name
         if csv.exists():
-            print(f"[Frechet Audio Distance] csv file {csv} already exists, exitting...")
+            print(f"CSV file {csv} already exists, exitting...")
             return
 
         # 1. Load background embeddings
-        mu, cov = self.load_background(background_dir)
+        mu, cov = self.load_stats(background_dir)
 
-        # Compute the standard deviation for each feature.
-        # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
-        sigma = np.sqrt(np.diagonal(cov))
+        if mode == 'z':
+            # Compute the standard deviation for each feature.
+            # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
+            sigma = np.sqrt(np.diagonal(cov))
 
-        # Make sure to add a small constant to the denominator to avoid division by zero.
-        sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
+            # Make sure to add a small constant to the denominator to avoid division by zero.
+            sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
         
-        # 2. Define z-score function
-        def z(f):
+        # 2. Define scoring function
+        def score_parallel(f):
             # Load embedding
             embd = self.cache_embedding_file(f)
+            try:
 
-            if use_fad:
-                # Calculate FAD
-                mu_eval, cov_eval = self.calculate_embd_statistics(embd)
-                return self.calculate_frechet_distance(mu, cov, mu_eval, cov_eval)
-
-            else:
-                # Calculate z-score
-                zs = self.calculate_z_score_song(embd, mu, sigma)
+                if mode == 'individual':
+                    # Calculate FAD for individual songs
+                    mu_eval, cov_eval = self.calculate_embd_statistics(embd)
+                    if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
+                        print(f"{f} is incorrect", embd.shape)
+                    return self.calculate_frechet_distance(mu, cov, mu_eval, cov_eval)
                 
-                # Calculate mean abs z score
-                return np.mean(np.abs(zs))
-        
-        # 3. Calculate z score for each eval file
-        eval_dir = Path(eval_dir)
-        _files = [eval_dir / f for f in os.listdir(eval_dir)]
-        _files = [f for f in _files if f.is_file()]
+                elif mode == 'z':
+                    # Calculate z-score matrix
+                    zs = (embd - mu) / sigma
+                    
+                    # Calculate mean abs z score
+                    return np.mean(np.abs(zs))
+                
+                else:
+                    raise ValueError(f"Invalid mode {mode}")
 
-        z_scores = tmap(z, _files, desc="Calculating z scores...", max_workers=self.audio_load_worker)
-        z_scores = np.array(z_scores)
+            except Exception as e:
+                print(f)
+                print(self.ml.name)
+                raise e 
+
+        if mode != 'delta':
+            # 3. Calculate z score for each eval file
+            eval_dir = Path(eval_dir)
+            _files = [eval_dir / f for f in os.listdir(eval_dir)]
+            _files = [f for f in _files if f.is_file()]
+            
+            scores = tmap(score_parallel, _files, desc=f"Calculating {mode} scores...", max_workers=self.audio_load_worker)
+            scores = np.array(scores)
+        
+        else:
+            # Delta mode cannot be parallelized because of memory constraints
+            # Loop through each index, make a shallow copy, remove it from the eval set, calculate the FAD score
+            embd_list, _files = self.load_embeddings(eval_dir, concat=False)
+            embd_list = embd_list[:500]
+            _files = _files[:500]
+            fad_original = self.calculate_frechet_distance(mu, cov, *self.calculate_embd_statistics(np.concatenate(embd_list, axis=0)))
+
+            scores = []
+            for i in tq(range(len(embd_list)), desc="Calculating delta scores"):
+                # Shallow copy
+                embd_list_copy = embd_list.copy()
+                embd_list_copy.pop(i)
+                mu_eval, cov_eval = self.calculate_embd_statistics(np.concatenate(embd_list_copy, axis=0))
+                scores.append(self.calculate_frechet_distance(mu, cov, mu_eval, cov_eval) - fad_original)
 
         # Write the sorted z scores to csv
-        pairs = list(zip(_files, z_scores))
+        pairs = list(zip(_files, scores))
         pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
         write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
