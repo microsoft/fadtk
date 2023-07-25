@@ -17,12 +17,81 @@ from torch import nn
 from scipy import linalg
 import soundfile as sf
 from pathlib import Path
+from numba import njit
 from hypy_utils import write
 from hypy_utils.tqdm_utils import tq, pmap, tmap, smap
 from hypy_utils.nlp_utils import substr_between
 
 from .models.pann import Cnn14_16k
 from .model_loader import ModelLoader
+
+
+def calc_embd_statistics(embd_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate the mean and covariance matrix of a list of embeddings.
+    """
+    # if isinstance(embd_lst, list):
+    #     embd_lst = np.array(embd_lst)
+    mu = np.mean(embd_lst, axis=0)
+    cov = np.cov(embd_lst, rowvar=False)
+    return mu, cov
+
+
+def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
+    """
+    Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
+    
+    Numpy implementation of the Frechet Distance.
+    The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
+    and X_2 ~ N(mu_2, C_2) is
+            d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
+    Stable version by Dougal J. Sutherland.
+    Params:
+    -- mu1   : Numpy array containing the activations of a layer of the
+            inception net (like returned by the function 'get_predictions')
+            for generated samples.
+    -- mu2   : The sample mean over activations, precalculated on an
+            representative data set.
+    -- cov1: The covariance matrix over activations for generated samples.
+    -- cov2: The covariance matrix over activations, precalculated on an
+            representative data set.
+    Returns:
+    --   : The Frechet Distance.
+    """
+
+    mu1 = np.atleast_1d(mu1)
+    mu2 = np.atleast_1d(mu2)
+
+    cov1 = np.atleast_2d(cov1)
+    cov2 = np.atleast_2d(cov2)
+
+    assert mu1.shape == mu2.shape, \
+        f'Training and test mean vectors have different lengths ({mu1.shape} vs {mu2.shape})'
+    assert cov1.shape == cov2.shape, \
+        f'Training and test covariances have different dimensions ({cov1.shape} vs {cov2.shape})'
+
+    diff = mu1 - mu2
+
+    # Product might be almost singular
+    covmean, _ = linalg.sqrtm(cov1.dot(cov2), disp=False)
+    if not np.isfinite(covmean).all():
+        msg = ('fid calculation produces singular product; '
+            'adding %s to diagonal of cov estimates') % eps
+        print(msg)
+        offset = np.eye(cov1.shape[0]) * eps
+        covmean = linalg.sqrtm((cov1 + offset).dot(cov2 + offset))
+
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError('Imaginary component {}'.format(m))
+        covmean = covmean.real
+
+    tr_covmean = np.trace(covmean)
+
+    return (diff.dot(diff) + np.trace(cov1)
+            + np.trace(cov2) - 2 * tr_covmean)
 
 
 def find_sox_formats(sox_path: str) -> list[str]:
@@ -43,6 +112,23 @@ def _cache_embedding_batch(args):
         fad.cache_embedding_file(f)
 
 
+def cache_embedding_files_raw(files: list[Path], ml_fn: Callable[[], ModelLoader], workers: int = 8, **kwargs):
+    """
+    Get embeddings for all audio files in a directory.
+
+    :param ml_fn: A function that returns a ModelLoader instance.
+    """
+    print(f"[Frechet Audio Distance] Loading {len(files)} audio files...")
+
+    # Split files into batches
+    batches = list(np.array_split(files, workers))
+    
+    # Cache embeddings in parallel
+    multiprocessing.set_start_method('spawn', force=True)
+    with torch.multiprocessing.Pool(workers) as pool:
+        pool.map(_cache_embedding_batch, [(b, ml_fn(), kwargs) for b in batches])
+
+
 def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], workers: int = 8, **kwargs):
     """
     Get embeddings for all audio files in a directory.
@@ -55,18 +141,7 @@ def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], wo
     files = [dir / f for f in os.listdir(dir)]
     files = [f for f in files if f.is_file()]
 
-    # Randomize order
-    random.shuffle(files)
-
-    print(f"[Frechet Audio Distance] Loading {len(files)} audio files from {dir}...")
-
-    # Split files into batches
-    batches = list(np.array_split(files, workers))
-    
-    # Cache embeddings in parallel
-    multiprocessing.set_start_method('spawn', force=True)
-    with torch.multiprocessing.Pool(workers) as pool:
-        pool.map(_cache_embedding_batch, [(b, ml_fn(), kwargs) for b in batches])
+    cache_embedding_files_raw(files, ml_fn, workers, **kwargs)
 
 
 class FrechetAudioDistance:
@@ -139,72 +214,6 @@ class FrechetAudioDistance:
 
         return embd
     
-    def calculate_embd_statistics(self, embd_lst: list | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Calculate the mean and covariance matrix of a list of embeddings.
-        """
-        if isinstance(embd_lst, list):
-            embd_lst = np.array(embd_lst)
-        mu = np.mean(embd_lst, axis=0)
-        cov = np.cov(embd_lst, rowvar=False)
-        return mu, cov
-
-    def calculate_frechet_distance(self, mu1, cov1, mu2, cov2, eps=1e-6):
-        """
-        Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
-        
-        Numpy implementation of the Frechet Distance.
-        The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
-        and X_2 ~ N(mu_2, C_2) is
-                d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
-        Stable version by Dougal J. Sutherland.
-        Params:
-        -- mu1   : Numpy array containing the activations of a layer of the
-                inception net (like returned by the function 'get_predictions')
-                for generated samples.
-        -- mu2   : The sample mean over activations, precalculated on an
-                representative data set.
-        -- cov1: The covariance matrix over activations for generated samples.
-        -- cov2: The covariance matrix over activations, precalculated on an
-                representative data set.
-        Returns:
-        --   : The Frechet Distance.
-        """
-
-        mu1 = np.atleast_1d(mu1)
-        mu2 = np.atleast_1d(mu2)
-
-        cov1 = np.atleast_2d(cov1)
-        cov2 = np.atleast_2d(cov2)
-
-        assert mu1.shape == mu2.shape, \
-            f'Training and test mean vectors have different lengths ({mu1.shape} vs {mu2.shape})'
-        assert cov1.shape == cov2.shape, \
-            f'Training and test covariances have different dimensions ({cov1.shape} vs {cov2.shape})'
-
-        diff = mu1 - mu2
-
-        # Product might be almost singular
-        covmean, _ = linalg.sqrtm(cov1.dot(cov2), disp=False)
-        if not np.isfinite(covmean).all():
-            msg = ('fid calculation produces singular product; '
-                'adding %s to diagonal of cov estimates') % eps
-            print(msg)
-            offset = np.eye(cov1.shape[0]) * eps
-            covmean = linalg.sqrtm((cov1 + offset).dot(cov2 + offset))
-
-        # Numerical error might give slight imaginary component
-        if np.iscomplexobj(covmean):
-            if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
-                m = np.max(np.abs(covmean.imag))
-                raise ValueError('Imaginary component {}'.format(m))
-            covmean = covmean.real
-
-        tr_covmean = np.trace(covmean)
-
-        return (diff.dot(diff) + np.trace(cov1)
-                + np.trace(cov2) - 2 * tr_covmean)
-    
     def load_embeddings(self, dir: str | Path, max_count: int = -1, concat: bool = True):
         """
         Load embeddings for all audio files in a directory.
@@ -243,7 +252,7 @@ class FrechetAudioDistance:
         embds_background = self.load_embeddings(dir)
         print(f"> Embeddings shape {embds_background.shape}, calculating statistics...")
         
-        mu, cov = self.calculate_embd_statistics(embds_background)
+        mu, cov = calc_embd_statistics(embds_background)
         del embds_background
         print("> Embeddings statistics calculated.")
         
@@ -256,7 +265,7 @@ class FrechetAudioDistance:
         mu_bg, cov_bg = self.load_stats(background_dir)
         mu_eval, cov_eval = self.load_stats(eval_dir)
 
-        return self.calculate_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
+        return calc_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
 
     def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, min_inv = 0.0002, max_idx = -1):
         """
@@ -306,9 +315,9 @@ class FrechetAudioDistance:
 
             print(f"Selected eval shape {embds_eval.shape}")
             
-            mu_eval, cov_eval = self.calculate_embd_statistics(embds_eval)
+            mu_eval, cov_eval = calc_embd_statistics(embds_eval)
 
-            fad_score = self.calculate_frechet_distance(mu_background, cov_background, mu_eval, cov_eval)
+            fad_score = calc_frechet_distance(mu_background, cov_background, mu_eval, cov_eval)
 
             # Add to results
             results.append([n, fad_score])
@@ -344,10 +353,10 @@ class FrechetAudioDistance:
 
                 if mode == 'individual':
                     # Calculate FAD for individual songs
-                    mu_eval, cov_eval = self.calculate_embd_statistics(embd)
+                    mu_eval, cov_eval = calc_embd_statistics(embd)
                     if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
                         print(f"{f} is incorrect", embd.shape)
-                    return self.calculate_frechet_distance(mu, cov, mu_eval, cov_eval)
+                    return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
                 
                 elif mode == 'z':
                     # Calculate z-score matrix
@@ -379,15 +388,15 @@ class FrechetAudioDistance:
             embd_list, _files = self.load_embeddings(eval_dir, concat=False)
             embd_list = embd_list[:500]
             _files = _files[:500]
-            fad_original = self.calculate_frechet_distance(mu, cov, *self.calculate_embd_statistics(np.concatenate(embd_list, axis=0)))
+            fad_original = calc_frechet_distance(mu, cov, *calc_embd_statistics(np.concatenate(embd_list, axis=0)))
 
             scores = []
             for i in tq(range(len(embd_list)), desc="Calculating delta scores"):
                 # Shallow copy
                 embd_list_copy = embd_list.copy()
                 embd_list_copy.pop(i)
-                mu_eval, cov_eval = self.calculate_embd_statistics(np.concatenate(embd_list_copy, axis=0))
-                scores.append(self.calculate_frechet_distance(mu, cov, mu_eval, cov_eval) - fad_original)
+                mu_eval, cov_eval = calc_embd_statistics(np.concatenate(embd_list_copy, axis=0))
+                scores.append(calc_frechet_distance(mu, cov, mu_eval, cov_eval) - fad_original)
 
         # Write the sorted z scores to csv
         pairs = list(zip(_files, scores))
