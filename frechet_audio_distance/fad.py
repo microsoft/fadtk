@@ -21,17 +21,20 @@ from numba import njit
 from hypy_utils import write
 from hypy_utils.tqdm_utils import tq, pmap, tmap, smap
 from hypy_utils.nlp_utils import substr_between
+from hypy_utils.logging_utils import setup_logger
 
 from .models.pann import Cnn14_16k
 from .model_loader import ModelLoader
+
+log = setup_logger()
 
 
 def calc_embd_statistics(embd_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the mean and covariance matrix of a list of embeddings.
     """
-    # if isinstance(embd_lst, list):
-    #     embd_lst = np.array(embd_lst)
+    if isinstance(embd_lst, list):
+        embd_lst = np.array(embd_lst)
     mu = np.mean(embd_lst, axis=0)
     cov = np.cov(embd_lst, rowvar=False)
     return mu, cov
@@ -77,7 +80,7 @@ def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
     if not np.isfinite(covmean).all():
         msg = ('fid calculation produces singular product; '
             'adding %s to diagonal of cov estimates') % eps
-        print(msg)
+        log.info(msg)
         offset = np.eye(cov1.shape[0]) * eps
         covmean = linalg.sqrtm((cov1 + offset).dot(cov2 + offset))
 
@@ -102,13 +105,14 @@ def find_sox_formats(sox_path: str) -> list[str]:
     return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
 
 
+# ===================== TODO: Move this section to fad_batch.py =====================
 def _cache_embedding_batch(args):
     fs: list[Path]
     ml: ModelLoader
     fs, ml, kwargs = args
     fad = FrechetAudioDistance(ml, **kwargs)
     for f in fs:
-        print(f"Loading {f} using {ml.name}")
+        log.info(f"Loading {f} using {ml.name}")
         fad.cache_embedding_file(f)
 
 
@@ -118,7 +122,7 @@ def cache_embedding_files_raw(files: list[Path], ml_fn: Callable[[], ModelLoader
 
     :param ml_fn: A function that returns a ModelLoader instance.
     """
-    print(f"[Frechet Audio Distance] Loading {len(files)} audio files...")
+    log.info(f"[Frechet Audio Distance] Loading {len(files)} audio files...")
 
     # Split files into batches
     batches = list(np.array_split(files, workers))
@@ -142,17 +146,22 @@ def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], wo
     files = [f for f in files if f.is_file()]
 
     cache_embedding_files_raw(files, ml_fn, workers, **kwargs)
+# ====================================================================================
 
 
 class FrechetAudioDistance:
-    def __init__(self, ml: ModelLoader, verbose=True, audio_load_worker=8, sox_path="sox"):
-        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    loaded = False
+
+    def __init__(self, ml: ModelLoader, audio_load_worker=8, sox_path="sox", load_model=True):
         self.ml = ml
-        self.ml.load_model()
-        self.verbose = verbose
         self.audio_load_worker = audio_load_worker
         self.sox_path = sox_path
         self.sox_formats = find_sox_formats(sox_path)
+
+        if load_model:
+            self.ml.load_model()
+            self.loaded = True
 
         # Disable gradient calculation because we're not training
         torch.autograd.set_grad_enabled(False)
@@ -223,11 +232,11 @@ class FrechetAudioDistance:
         # List valid audio files
         files = [dir / f for f in os.listdir(dir)]
         files = [f for f in files if f.is_file()]
-        print(f"Loading {len(files)} audio files from {dir}...")
+        log.info(f"Loading {len(files)} audio files from {dir}...")
 
         # Load embeddings
         if max_count == -1:
-            embd_lst = tmap(self.cache_embedding_file, files, disable=(not self.verbose), desc="Loading audio files...", max_workers=self.audio_load_worker)
+            embd_lst = tmap(self.cache_embedding_file, files, desc="Loading audio files...", max_workers=self.audio_load_worker)
         else:
             total_len = 0
             embd_lst = []
@@ -247,14 +256,26 @@ class FrechetAudioDistance:
         """
         Load embedding statistics from a directory.
         """
-        print(f"Loading embedding files from {dir}...")
+        cache_dir = Path(dir) / "stats" / self.ml.name
+        if cache_dir.exists():
+            log.info(f"Embedding statistics is already cached for {dir}, loading...")
+            mu = np.load(cache_dir / "mu.npy")
+            cov = np.load(cache_dir / "cov.npy")
+            return mu, cov
+
+        log.info(f"Loading embedding files from {dir}...")
         
         embds_background = self.load_embeddings(dir)
-        print(f"> Embeddings shape {embds_background.shape}, calculating statistics...")
+        log.info(f"> Embeddings shape {embds_background.shape}, calculating statistics...")
         
         mu, cov = calc_embd_statistics(embds_background)
         del embds_background
-        print("> Embeddings statistics calculated.")
+        log.info("> Embeddings statistics calculated.")
+
+        # Save statistics
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        np.save(cache_dir / "mu.npy", mu)
+        np.save(cache_dir / "cov.npy", cov)
         
         return mu, cov
 
@@ -282,7 +303,7 @@ class FrechetAudioDistance:
         """
         csv = Path('data/fad') / str(min_inv) / self.ml.name / ('n-songs' if per_song else 'n-frames') / ('per-n' if per_n else 'per-ninv') / csv_name
         if csv.exists():
-            print(f"CSV file {csv} already exists, exitting...")
+            log.info(f"CSV file {csv} already exists, exitting...")
             return
 
         # 1. Load background embeddings
@@ -313,7 +334,7 @@ class FrechetAudioDistance:
                 indices = np.random.choice(np.concatenate(embd_list, axis=0).shape[0], size=n, replace=True)
                 embds_eval = np.concatenate(embd_list, axis=0)[indices]
 
-            print(f"Selected eval shape {embds_eval.shape}")
+            log.info(f"Selected eval shape {embds_eval.shape}")
             
             mu_eval, cov_eval = calc_embd_statistics(embds_eval)
 
@@ -331,7 +352,7 @@ class FrechetAudioDistance:
         """
         csv = Path('data') / f'fad-{mode}' / self.ml.name / csv_name
         if csv.exists():
-            print(f"CSV file {csv} already exists, exitting...")
+            log.info(f"CSV file {csv} already exists, exitting...")
             return
 
         # 1. Load background embeddings
@@ -355,7 +376,7 @@ class FrechetAudioDistance:
                     # Calculate FAD for individual songs
                     mu_eval, cov_eval = calc_embd_statistics(embd)
                     if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
-                        print(f"{f} is incorrect", embd.shape)
+                        log.info(f"{f} is incorrect", embd.shape)
                     return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
                 
                 elif mode == 'z':
@@ -369,8 +390,8 @@ class FrechetAudioDistance:
                     raise ValueError(f"Invalid mode {mode}")
 
             except Exception as e:
-                print(f)
-                print(self.ml.name)
+                log.info(f)
+                log.info(self.ml.name)
                 raise e 
 
         if mode != 'delta':
