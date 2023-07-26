@@ -17,9 +17,10 @@ from .models.pann import Cnn14_16k
 
 
 class ModelLoader(ABC):
-    def __init__(self, name: str):
+    def __init__(self, name: str, num_features: int, sr: int):
         self.model = None
-        self.sr = None
+        self.sr = sr
+        self.num_features = num_features
         self.name = name
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -60,7 +61,7 @@ class VGGishModel(ModelLoader):
     S. Hershey et al., "CNN Architectures for Large-Scale Audio Classification", ICASSP 2017
     """
     def __init__(self, use_pca=False, use_activation=False):
-        super().__init__("vggish")
+        super().__init__("vggish", 128, 16000)
         self.use_pca = use_pca
         self.use_activation = use_activation
 
@@ -70,7 +71,6 @@ class VGGishModel(ModelLoader):
             self.model.postprocess = False
         if not self.use_activation:
             self.model.embeddings = nn.Sequential(*list(self.model.embeddings.children())[:-1])
-        self.sr = 16000
         self.model.eval()
         self.model.to(self.device)
 
@@ -83,7 +83,7 @@ class PANNModel(ModelLoader):
     Kong et al., "PANNs: Large-Scale Pretrained Audio Neural Networks for Audio Pattern Recognition", IEEE/ACM Transactions on Audio, Speech, and Language Processing 28 (2020)
     """
     def __init__(self):
-        super().__init__("pann")
+        super().__init__("pann", 2048, 16000)
 
     def load_model(self):
         model_path = os.path.join(torch.hub.get_dir(), "PANNs-FAD.pth")
@@ -92,7 +92,6 @@ class PANNModel(ModelLoader):
         self.model = Cnn14_16k(sample_rate=16000, window_size=512, hop_size=160, mel_bins=64, fmin=50, fmax=8000, classes_num=527)
         checkpoint = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
-        self.sr = 16000
         self.model.eval()
         self.model.to(self.device)
 
@@ -100,7 +99,7 @@ class PANNModel(ModelLoader):
         with torch.no_grad():
             out = self.model(torch.tensor(audio).float().unsqueeze(0).to(self.device), None)
             d = out['embedding'].data
-            print(d.shape)
+            # print(d.shape)
             return d
         
 
@@ -109,18 +108,17 @@ ENCODEC_DEFAULT_VARIANT = '48k'
 
 class EncodecBaseModel(ModelLoader):
     def __init__(self, name: str, variant: Literal['48k', '24k'] = ENCODEC_DEFAULT_VARIANT):
-        super().__init__(name if variant == '24k' else f"{name}-{variant}")
+        super().__init__(name if variant == '24k' else f"{name}-{variant}", 128,
+                         sr=24000 if variant == '24k' else 48000)
         self.variant = variant
     
     def load_model(self):
         from encodec import EncodecModel
         if self.variant == '48k':
             self.model = EncodecModel.encodec_model_48khz()
-            self.sr = 48000
             self.model.set_target_bandwidth(24)
         else:
             self.model = EncodecModel.encodec_model_24khz()
-            self.sr = 24000
             self.model.set_target_bandwidth(12)
         self.model.to(self.device)
 
@@ -194,7 +192,6 @@ class EncodecEmbModel(EncodecBaseModel):
         encoded_frames = torch.cat(encoded_frames, dim=0)
         # print(encoded_frames.shape) # [timeframes, 128]
         return encoded_frames
-                
 
     def _get_frame(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
@@ -206,6 +203,16 @@ class EncodecEmbModel(EncodecBaseModel):
             emb = emb[0] # [128, timeframes]
             emb = emb.transpose(0, 1) # [timeframes, 128]
             return emb
+        
+    def _decode_frame(self, emb: np.ndarray) -> np.ndarray:
+        with torch.no_grad():
+            emb = torch.from_numpy(emb).float().to(self.device) # [timeframes, 128]
+            emb = emb.transpose(0, 1) # [128, timeframes]
+            emb = emb.unsqueeze(0) # [1, 128, timeframes]
+            audio = self.model.decoder(emb) # [1, 1, timeframes]
+            audio = audio[0, 0] # [timeframes]
+
+            return audio.cpu().numpy()
 
 
 class DACModel(ModelLoader):
@@ -215,12 +222,11 @@ class DACModel(ModelLoader):
     pip install descript-audio-codec
     """
     def __init__(self):
-        super().__init__("dac-44kHz")
+        super().__init__("dac-44kHz", 1024, 44100)
 
     def load_model(self):
         from dac.utils import load_model
         self.model = load_model(tag='latest', model_type='44khz')
-        self.sr = 44100
         self.model.eval()
         self.model.to(self.device)
 
@@ -278,28 +284,31 @@ class MERTModel(ModelLoader):
     """
     MERT model from https://huggingface.co/m-a-p/MERT-v1-330M
     """
-    def __init__(self, size='v1-95M'):
-        super().__init__(f"MERT-{size}")
+    def __init__(self, size='v1-95M', layer=12):
+        super().__init__(f"MERT-{size}" + ("" if layer == 12 else f"-{layer}"), 768, 24000)
+        self.huggingface_id = f"m-a-p/MERT-{size}"
+        self.layer = layer
+        
 
     def load_model(self):
         from transformers import Wav2Vec2FeatureExtractor
         from transformers import AutoModel
         
-        self.model = AutoModel.from_pretrained(f"m-a-p/{self.name}", trust_remote_code=True)
-        self.processor = Wav2Vec2FeatureExtractor.from_pretrained(f"m-a-p/{self.name}",trust_remote_code=True)
-        self.sr = self.processor.sampling_rate
+        self.model = AutoModel.from_pretrained(self.huggingface_id, trust_remote_code=True)
+        self.processor = Wav2Vec2FeatureExtractor.from_pretrained(self.huggingface_id, trust_remote_code=True)
+        # self.sr = self.processor.sampling_rate
         self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
         with torch.no_grad():
-            out = self.model(**inputs, output_hidden_states=False)
-            out = out.last_hidden_state
-        
-        # print(out.shape) # [1, timeframes, 768]
-        # print(out[-1].shape) # [timeframes, 768]
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze()
+            # print(out.shape) # [13 layers, timeframes, 768]
+            out = out[self.layer]
+            # print(out.shape) # [timeframes, 768]
 
-        return out[-1]
+        return out
     
 
 class CLAPLaionModel(ModelLoader):
@@ -307,7 +316,7 @@ class CLAPLaionModel(ModelLoader):
     CLAP model from https://github.com/LAION-AI/CLAP
     """
     def __init__(self, type: Literal['audio', 'music']):
-        super().__init__(f"clap-laion-{type}")
+        super().__init__(f"clap-laion-{type}", 512, 48000)
         self.type = type
 
         if type == 'audio':
@@ -327,7 +336,6 @@ class CLAPLaionModel(ModelLoader):
 
         self.model = laion_clap.CLAP_Module(enable_fusion=False)
         self.model.load_ckpt(self.model_file)
-        self.sr = 48000
         self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
@@ -353,7 +361,7 @@ class CLAPLaionModel(ModelLoader):
         # Concatenate the embeddings
         emb = torch.cat(embeddings, dim=0)
 
-        print(emb.shape) # [timeframes, 512]
+        # print(emb.shape) # [timeframes, 512]
         return emb
 
     def int16_to_float32(self, x):
@@ -370,12 +378,11 @@ class CLAPLaionModel(ModelLoader):
 
 class CdpamBase(ModelLoader):
     def __init__(self, name: str):
-        super().__init__(name)
+        super().__init__(name, 22050)
 
     def load_model(self):
         from cdpam import CDPAM
         self.model = CDPAM()
-        self.sr = 22050
         self.model.to(self.device)
     
     def load_wav(self, wav_file: Path):
