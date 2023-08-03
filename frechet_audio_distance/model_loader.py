@@ -74,31 +74,6 @@ class VGGishModel(ModelLoader):
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         return self.model.forward(audio, self.sr)
-
-
-class PANNModel(ModelLoader):
-    """
-    Kong et al., "PANNs: Large-Scale Pretrained Audio Neural Networks for Audio Pattern Recognition", IEEE/ACM Transactions on Audio, Speech, and Language Processing 28 (2020)
-    """
-    def __init__(self):
-        super().__init__("pann", 2048, 16000)
-
-    def load_model(self):
-        model_path = os.path.join(torch.hub.get_dir(), "PANNs-FAD.pth")
-        if not(os.path.exists(model_path)):
-            torch.hub.download_url_to_file('https://zenodo.org/record/3987831/files/Cnn14_16k_mAP%3D0.438.pth', dst=model_path, progress=True)
-        self.model = Cnn14_16k(sample_rate=16000, window_size=512, hop_size=160, mel_bins=64, fmin=50, fmax=8000, classes_num=527)
-        checkpoint = torch.load(model_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model'])
-        self.model.eval()
-        self.model.to(self.device)
-
-    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
-        with torch.no_grad():
-            out = self.model(torch.tensor(audio).float().unsqueeze(0).to(self.device), None)
-            d = out['embedding'].data
-            # print(d.shape)
-            return d
         
 
 ENCODEC_DEFAULT_VARIANT = '24k'
