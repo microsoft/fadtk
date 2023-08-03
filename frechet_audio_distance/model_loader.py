@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
 import math
-import os
 from typing import Literal
 import numpy as np
-import requests
 import soundfile
 
 import torch
@@ -11,9 +9,9 @@ import librosa
 from torch import nn
 from pathlib import Path
 from hypy_utils.downloader import download_file
+import torch.nn.functional as F
 from audiotools import AudioSignal
 
-from .models.pann import Cnn14_16k
 
 
 class ModelLoader(ABC):
@@ -130,8 +128,6 @@ class EncodecBaseModel(ModelLoader):
         wav, sr = torchaudio.load(wav_file)
         wav = convert_audio(wav, sr, self.sr, self.model.channels)
 
-        # print(wav.shape, torch.mean(wav), torch.std(wav))
-
         # If it's longer than 3 minutes, cut it
         if wav.shape[1] > 3 * 60 * self.sr:
             wav = wav[:, :3 * 60 * self.sr]
@@ -151,13 +147,9 @@ class EncodecQuantModel(EncodecBaseModel):
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             frames = self.model.encode(audio.to(self.device))
-            # print(frames[0][0].shape) # [batch_size, n_quantizers, timeframes]
-            frames = torch.cat([e[0] for e in frames], dim=-1)
-            # print(frames.shape) # [batch_size, n_quantizers, timeframes]
-            frames = frames[0]
-            # print(frames.shape) # [n_quantizers, timeframes]
-            frames = frames.transpose(0, 1)
-            # print(frames.shape) # [timeframes, n_quantizers]
+            frames = torch.cat([e[0] for e in frames], dim=-1) # [batch_size, n_quantizers, timeframes]
+            frames = frames[0] # [n_quantizers, timeframes]
+            frames = frames.transpose(0, 1) # [timeframes, n_quantizers]
             return frames
 
 
@@ -189,8 +181,7 @@ class EncodecEmbModel(EncodecBaseModel):
             encoded_frames.append(self._get_frame(frame))
 
         # Concatenate
-        encoded_frames = torch.cat(encoded_frames, dim=0)
-        # print(encoded_frames.shape) # [timeframes, 128]
+        encoded_frames = torch.cat(encoded_frames, dim=0) # [timeframes, 128]
         return encoded_frames
 
     def _get_frame(self, audio: np.ndarray) -> np.ndarray:
@@ -263,11 +254,8 @@ class DACModel(ModelLoader):
             signal_from_batch = AudioSignal(audio.audio_data[i, ...], self.sr)
             signal_from_batch.to(self.device)
             e1 = self.model.encoder(signal_from_batch.audio_data).cpu() # [1, 1024, timeframes]
-            # print(e1.shape)
             e1 = e1[0] # [1024, timeframes]
-            # print(e1.shape)
             e1 = e1.transpose(0, 1) # [timeframes, 1024]
-            # print(e1.shape)
             emb.append(e1)
 
         emb = torch.cat(emb, dim=0)
@@ -291,7 +279,6 @@ class MERTModel(ModelLoader):
         self.huggingface_id = f"m-a-p/MERT-{size}"
         self.layer = layer
         
-
     def load_model(self):
         from transformers import Wav2Vec2FeatureExtractor
         from transformers import AutoModel
