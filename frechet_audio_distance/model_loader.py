@@ -103,7 +103,7 @@ class PANNModel(ModelLoader):
             return d
         
 
-ENCODEC_DEFAULT_VARIANT = '48k'
+ENCODEC_DEFAULT_VARIANT = '24k'
 
 
 class EncodecBaseModel(ModelLoader):
@@ -283,6 +283,8 @@ class DACModel(ModelLoader):
 class MERTModel(ModelLoader):
     """
     MERT model from https://huggingface.co/m-a-p/MERT-v1-330M
+
+    Please specify the layer to use (1-12).
     """
     def __init__(self, size='v1-95M', layer=12):
         super().__init__(f"MERT-{size}" + ("" if layer == 12 else f"-{layer}"), 768, 24000)
@@ -359,9 +361,7 @@ class CLAPLaionModel(ModelLoader):
                 embeddings.append(emb)
 
         # Concatenate the embeddings
-        emb = torch.cat(embeddings, dim=0)
-
-        # print(emb.shape) # [timeframes, 512]
+        emb = torch.cat(embeddings, dim=0) # [timeframes, 512]
         return emb
 
     def int16_to_float32(self, x):
