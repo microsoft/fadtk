@@ -336,7 +336,7 @@ class CLAPLaionModel(ModelLoader):
     def load_model(self):
         import laion_clap
 
-        self.model = laion_clap.CLAP_Module(enable_fusion=False)
+        self.model = laion_clap.CLAP_Module(enable_fusion=False, amodel='HTSAT-tiny' if self.type == 'audio' else 'HTSAT-base')
         self.model.load_ckpt(self.model_file)
         self.model.to(self.device)
 
