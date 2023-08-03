@@ -8,11 +8,12 @@ import torch
 from scipy import linalg
 from pathlib import Path
 from hypy_utils import write
-from hypy_utils.tqdm_utils import tq, tmap
+from hypy_utils.tqdm_utils import tq, tmap, pmap
 from hypy_utils.nlp_utils import substr_between
 from hypy_utils.logging_utils import setup_logger
 
 from .model_loader import ModelLoader
+from .utils import calculate_embd_statistics_online
 
 log = setup_logger()
 
@@ -139,16 +140,21 @@ class FrechetAudioDistance:
                 subprocess.run([self.sox_path, f, *sox_args, new])
 
         return self.ml.load_wav(new)
+    
+    def get_cache_embedding_path(self, audio_dir: str | Path) -> Path:
+        """
+        Get the path to the cached embedding npy file for an audio file.
+        """
+        return Path(audio_dir).parent / "embeddings" / self.ml.name / audio_dir.with_suffix(".npy").name
 
-    def cache_embedding_file(self, audio_dir: str | Path) -> np.ndarray:
+    def cache_embedding_file(self, audio_dir: str | Path):
         """
         Compute embedding for an audio file and cache it to a file.
         """
-        audio_dir = Path(audio_dir)
-        cache = audio_dir.parent / "embeddings" / self.ml.name / audio_dir.with_suffix(".npy").name
+        cache = self.get_cache_embedding_path(audio_dir)
 
         if cache.exists():
-            return np.load(cache)
+            return
 
         # Load file
         wav_data = self.load_audio(audio_dir)
@@ -160,7 +166,13 @@ class FrechetAudioDistance:
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.save(cache, embd)
 
-        return embd
+    def read_embedding_file(self, audio_dir: str | Path):
+        """
+        Read embedding from a cached file.
+        """
+        cache = self.get_cache_embedding_path(audio_dir)
+        assert cache.exists(), f"Embedding file {cache} does not exist, please run cache_embedding_file first."
+        return np.load(cache)
     
     def load_embeddings(self, dir: str | Path, max_count: int = -1, concat: bool = True):
         """
@@ -175,12 +187,12 @@ class FrechetAudioDistance:
 
         # Load embeddings
         if max_count == -1:
-            embd_lst = tmap(self.cache_embedding_file, files, desc="Loading audio files...", max_workers=self.audio_load_worker)
+            embd_lst = tmap(self.read_embedding_file, files, desc="Loading audio files...", max_workers=self.audio_load_worker)
         else:
             total_len = 0
             embd_lst = []
             for f in tq(files, "Loading files"):
-                embd_lst.append(self.cache_embedding_file(f))
+                embd_lst.append(self.read_embedding_file(f))
                 total_len += embd_lst[-1].shape[0]
                 if total_len > max_count:
                     break
@@ -195,7 +207,9 @@ class FrechetAudioDistance:
         """
         Load embedding statistics from a directory.
         """
-        cache_dir = Path(dir) / "stats" / self.ml.name
+        dir = Path(dir)
+        cache_dir = dir / "stats" / self.ml.name
+        emb_dir = dir / "embeddings" / self.ml.name
         if cache_dir.exists():
             log.info(f"Embedding statistics is already cached for {dir}, loading...")
             mu = np.load(cache_dir / "mu.npy")
@@ -204,11 +218,7 @@ class FrechetAudioDistance:
 
         log.info(f"Loading embedding files from {dir}...")
         
-        embds_background = self.load_embeddings(dir)
-        log.info(f"> Embeddings shape {embds_background.shape}, calculating statistics...")
-        
-        mu, cov = calc_embd_statistics(embds_background)
-        del embds_background
+        mu, cov = calculate_embd_statistics_online(list(emb_dir.glob("*.npy")))
         log.info("> Embeddings statistics calculated.")
 
         # Save statistics
@@ -284,6 +294,8 @@ class FrechetAudioDistance:
 
             # Write results to csv
             write(csv, "\n".join([",".join([str(x) for x in row]) for row in results]))
+
+
     
     def find_z_songs(self, background_dir, eval_dir, csv_name: str, mode: Literal['z', 'individual', 'delta'] = 'delta'):
         """
@@ -297,6 +309,7 @@ class FrechetAudioDistance:
         # 1. Load background embeddings
         mu, cov = self.load_stats(background_dir)
 
+        sigma = None
         if mode == 'z':
             # Compute the standard deviation for each feature.
             # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
@@ -304,42 +317,16 @@ class FrechetAudioDistance:
 
             # Make sure to add a small constant to the denominator to avoid division by zero.
             sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
-        
-        # 2. Define scoring function
-        def score_parallel(f):
-            # Load embedding
-            embd = self.cache_embedding_file(f)
-            try:
-
-                if mode == 'individual':
-                    # Calculate FAD for individual songs
-                    mu_eval, cov_eval = calc_embd_statistics(embd)
-                    if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
-                        log.info(f"{f} is incorrect", embd.shape)
-                    return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
-                
-                elif mode == 'z':
-                    # Calculate z-score matrix
-                    zs = (embd - mu) / sigma
-                    
-                    # Calculate mean abs z score
-                    return np.mean(np.abs(zs))
-                
-                else:
-                    raise ValueError(f"Invalid mode {mode}")
-
-            except Exception as e:
-                log.info(f)
-                log.info(self.ml.name)
-                return None
 
         if mode != 'delta':
             # 3. Calculate z score for each eval file
             eval_dir = Path(eval_dir)
             _files = [eval_dir / f for f in os.listdir(eval_dir)]
             _files = [f for f in _files if f.is_file()]
+
+            args = [(self, f, mu, cov, sigma, mode) for f in _files]
             
-            scores = tmap(score_parallel, _files, desc=f"Calculating {mode} scores...", max_workers=self.audio_load_worker)
+            scores = pmap(_find_z_helper, args, desc=f"Calculating {mode} scores...", max_workers=self.audio_load_worker)
             scores = np.array(scores)
         
         else:
@@ -364,3 +351,32 @@ class FrechetAudioDistance:
         pairs = [p for p in pairs if p[1] is not None]
         pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
         write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
+
+
+def _find_z_helper(args):
+    fad, f, mu, cov, sigma, mode = args
+    # Load embedding
+    embd = fad.read_embedding_file(f)
+    try:
+
+        if mode == 'individual':
+            # Calculate FAD for individual songs
+            mu_eval, cov_eval = calc_embd_statistics(embd)
+            if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
+                log.info(f"{f} is incorrect", embd.shape)
+            return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
+        
+        elif mode == 'z':
+            # Calculate z-score matrix
+            zs = (embd - mu) / sigma
+            
+            # Calculate mean abs z score
+            return np.mean(np.abs(zs))
+        
+        else:
+            raise ValueError(f"Invalid mode {mode}")
+
+    except Exception as e:
+        log.info(f)
+        log.info(fad.ml.name)
+        return None
