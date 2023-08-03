@@ -376,15 +376,33 @@ class CLAPLaionModel(ModelLoader):
         return wav_data
 
 
-class CdpamBase(ModelLoader):
-    def __init__(self, name: str):
-        super().__init__(name, 22050)
+class CdpamModel(ModelLoader):
+    def __init__(self, mode: Literal['acoustic', 'content']) -> None:
+        super().__init__(f"cdpam-{mode}", 512, 22050)
+        self.mode = mode
+        assert mode in ['acoustic', 'content'], "Mode must be 'acoustic' or 'content'"
 
     def load_model(self):
         from cdpam import CDPAM
-        self.model = CDPAM()
-        self.model.to(self.device)
-    
+        self.model = CDPAM(dev=self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        audio = torch.from_numpy(audio).float().to(self.device)
+
+        # Take 1s chunks
+        chunk_size = self.sr
+        frames = []
+        for i in range(0, audio.shape[1], chunk_size):
+            chunk = audio[:, i:i+chunk_size]
+            _, acoustic, content = self.model.model.base_encoder.forward(chunk.unsqueeze(1))
+            v = acoustic if self.mode == 'acoustic' else content
+            v = F.normalize(v, dim=1)
+            frames.append(v)
+
+        # Concatenate the embeddings
+        emb = torch.cat(frames, dim=0) # [timeframes, 512]
+        return emb
+
     def load_wav(self, wav_file: Path):
         x, _  = librosa.load(wav_file, sr=22050)
         
@@ -395,15 +413,3 @@ class CdpamBase(ModelLoader):
         x  = np.float32(x)
         
         return x
-
-
-class CdpamAcoustic(CdpamBase):
-    def __init__(self) -> None:
-        super().__init__("cdpam-acoustic")
-
-    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
-        _, a, _ = self.model.model.base_encoder.forward(audio.unsqueeze(1))
-        print(a.shape)
-        
-        return a
-
