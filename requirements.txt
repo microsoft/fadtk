@@ -4,3 +4,9 @@ scipy
 tqdm
 soundfile
 resampy
+
+# Optional dependencies for embeddings:
+laion-clap
+encodec
+transformers
+cdpam

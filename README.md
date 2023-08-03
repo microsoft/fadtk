@@ -1,4 +1,4 @@
-## Frechet Audio Distance in PyTorch
+## FAD Toolkit
 
 A lightweight library of Frechet Audio Distance calculation.
 
@@ -8,12 +8,12 @@ Currently, we support embedding from:
 
 ### Installation
 
-`pip install frechet_audio_distance`
+`pip install fadtk`
 
 ### Demo
 
 ```python
-from frechet_audio_distance import FrechetAudioDistance
+from fadtk import FrechetAudioDistance
 
 # to use `vggish`
 frechet = FrechetAudioDistance(

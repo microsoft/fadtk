@@ -13,7 +13,6 @@ import torch.nn.functional as F
 from audiotools import AudioSignal
 
 
-
 class ModelLoader(ABC):
     def __init__(self, name: str, num_features: int, sr: int):
         self.model = None
@@ -48,8 +47,6 @@ class ModelLoader(ABC):
     def load_wav(self, wav_file: Path):
         wav_data, _ = soundfile.read(wav_file, dtype='int16')
         wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
-
-        # print(wav_data.shape, np.mean(wav_data), np.std(wav_data))
 
         return wav_data
 
@@ -267,10 +264,8 @@ class MERTModel(ModelLoader):
         inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
         with torch.no_grad():
             out = self.model(**inputs, output_hidden_states=True)
-            out = torch.stack(out.hidden_states).squeeze()
-            # print(out.shape) # [13 layers, timeframes, 768]
-            out = out[self.layer]
-            # print(out.shape) # [timeframes, 768]
+            out = torch.stack(out.hidden_states).squeeze() # [13 layers, timeframes, 768]
+            out = out[self.layer] # [timeframes, 768]
 
         return out
     
