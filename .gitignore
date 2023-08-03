@@ -156,3 +156,4 @@ crawler.iml
 tokens.toml
 /data/
 .syncthing*
+*.pt
