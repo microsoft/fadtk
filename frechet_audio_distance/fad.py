@@ -1,29 +1,17 @@
-"""
-Calculate Frechet Audio Distance betweeen two audio directories.
-
-Frechet distance implementation adapted from: https://github.com/mseitzer/pytorch-fid
-
-VGGish adapted from: https://github.com/harritaylor/torchvggish
-"""
-import multiprocessing
 import os
 import random
 import subprocess
 import tempfile
-from typing import Callable, Literal
+from typing import Literal
 import numpy as np
 import torch
-from torch import nn
 from scipy import linalg
-import soundfile as sf
 from pathlib import Path
-from numba import njit
 from hypy_utils import write
-from hypy_utils.tqdm_utils import tq, pmap, tmap, smap
+from hypy_utils.tqdm_utils import tq, tmap
 from hypy_utils.nlp_utils import substr_between
 from hypy_utils.logging_utils import setup_logger
 
-from .models.pann import Cnn14_16k
 from .model_loader import ModelLoader
 
 log = setup_logger()
@@ -33,11 +21,7 @@ def calc_embd_statistics(embd_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the mean and covariance matrix of a list of embeddings.
     """
-    if isinstance(embd_lst, list):
-        embd_lst = np.array(embd_lst)
-    mu = np.mean(embd_lst, axis=0)
-    cov = np.cov(embd_lst, rowvar=False)
-    return mu, cov
+    return np.mean(embd_lst, axis=0), np.cov(embd_lst, rowvar=False)
 
 
 def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
@@ -61,7 +45,6 @@ def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
     Returns:
     --   : The Frechet Distance.
     """
-
     mu1 = np.atleast_1d(mu1)
     mu2 = np.atleast_1d(mu2)
 
@@ -103,50 +86,6 @@ def find_sox_formats(sox_path: str) -> list[str]:
     """
     out = subprocess.check_output((sox_path, "-h")).decode()
     return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
-
-
-# ===================== TODO: Move this section to fad_batch.py =====================
-def _cache_embedding_batch(args):
-    fs: list[Path]
-    ml: ModelLoader
-    fs, ml, kwargs = args
-    fad = FrechetAudioDistance(ml, **kwargs)
-    for f in fs:
-        log.info(f"Loading {f} using {ml.name}")
-        fad.cache_embedding_file(f)
-
-
-def cache_embedding_files_raw(files: list[Path], ml_fn: Callable[[], ModelLoader], workers: int = 8, **kwargs):
-    """
-    Get embeddings for all audio files in a directory.
-
-    :param ml_fn: A function that returns a ModelLoader instance.
-    """
-    log.info(f"[Frechet Audio Distance] Loading {len(files)} audio files...")
-
-    # Split files into batches
-    batches = list(np.array_split(files, workers))
-    
-    # Cache embeddings in parallel
-    multiprocessing.set_start_method('spawn', force=True)
-    with torch.multiprocessing.Pool(workers) as pool:
-        pool.map(_cache_embedding_batch, [(b, ml_fn(), kwargs) for b in batches])
-
-
-def cache_embeddings_files(dir: str | Path, ml_fn: Callable[[], ModelLoader], workers: int = 8, **kwargs):
-    """
-    Get embeddings for all audio files in a directory.
-
-    :param ml_fn: A function that returns a ModelLoader instance.
-    """
-    dir = Path(dir)
-
-    # List valid audio files
-    files = [dir / f for f in os.listdir(dir)]
-    files = [f for f in files if f.is_file()]
-
-    cache_embedding_files_raw(files, ml_fn, workers, **kwargs)
-# ====================================================================================
 
 
 class FrechetAudioDistance:
@@ -392,7 +331,7 @@ class FrechetAudioDistance:
             except Exception as e:
                 log.info(f)
                 log.info(self.ml.name)
-                raise e 
+                return None
 
         if mode != 'delta':
             # 3. Calculate z score for each eval file
@@ -421,5 +360,7 @@ class FrechetAudioDistance:
 
         # Write the sorted z scores to csv
         pairs = list(zip(_files, scores))
+        # Filter out nones
+        pairs = [p for p in pairs if p[1] is not None]
         pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
         write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
