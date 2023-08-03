@@ -1,6 +1,7 @@
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 import numpy as np
+
+from hypy_utils.tqdm_utils import pmap
 
 
 def _process_file(file: Path):
@@ -23,8 +24,7 @@ def calculate_embd_statistics_online(files: list[Path]) -> tuple[np.ndarray, np.
     S = np.zeros((embd_dim, embd_dim))  # Sum of squares for online covariance computation
     n = 0  # Counter for total number of frames
 
-    with ProcessPoolExecutor() as executor:
-        results = executor.map(_process_file, files)
+    results = pmap(_process_file, files, desc='Calculating statistics')
     for _mu, _S, _n in results:
         delta = _mu - mu
         mu += _n / (n + _n) * delta
