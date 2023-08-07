@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from .fad import FrechetAudioDistance
+from .fad import FrechetAudioDistance, log
 from .model_loader import *
 from .fad_batch import cache_embeddings_files
 
@@ -32,5 +32,6 @@ if __name__ == "__main__":
     model = models[args.model]
 
     fad = FrechetAudioDistance(model, audio_load_worker=args.workers, sox_path=args.sox_path, load_model=False)
-    print(fad.score(args.baseline_dir, args.eval_dir))
+    log.info("FAD computed.")
+    log.info(f"The FAD score between {args.baseline_dir} and {args.eval_dir} is: {fad.score(args.baseline_dir, args.eval_dir)}")
     

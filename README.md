@@ -1,61 +1,30 @@
 ## FAD Toolkit
 
-A lightweight library of Frechet Audio Distance calculation.
-
-Currently, we support embedding from:
-- `VGGish` by [S. Hershey et al.](https://arxiv.org/abs/1812.08466)
-- `PANN` by [Kong et al.](https://arxiv.org/abs/1912.10211).
+A simple and standardized library for Frechet Audio Distance (FAD) calculation.
 
 ### Installation
 
 `pip install fadtk`
 
-### Demo
+### Command Line Usage
 
-```python
-from fadtk import FrechetAudioDistance
+First, create two directories, one for the baseline and one for the evaluation, and place *only* the audio files in them. Then, run the following commands:
 
-# to use `vggish`
-frechet = FrechetAudioDistance(
-    model_name="vggish",
-    use_pca=False, 
-    use_activation=False,
-    verbose=False
-)
-# to use `PANN`
-frechet = FrechetAudioDistance(
-    model_name="pann",
-    use_pca=False, 
-    use_activation=False,
-    verbose=False
-)
-fad_score = frechet.score("/path/to/background/set", "/path/to/eval/set")
-
+```sh
+# Compute embeddings for the baseline dataset
+python3 -m fadtk.embds MODEL-NAME /path/to/baseline/audio
+# Compute embeddings for the evaluation dataset (test set)
+python3 -m fadtk.embds MODEL-NAME /path/to/evaluation/audio
+# Compute FAD between the baseline and evaluation datasets
+python3 -m fadtk.score MODEL-NAME /path/to/baseline/audio /path/to/evaluation/audio
 ```
 
-### Result validation
+### Thanks to
 
-**Test 1: Distorted sine waves on vggish** (as provided [here](https://github.com/google-research/google-research/blob/master/frechet_audio_distance/gen_test_files.py#L86)) [[notes](https://jexrj22lgy.larksuite.com/docx/Vat2dr8Aqonim6xmE6nuoBVZsUe)]
-
-FAD scores comparison w.r.t. to original implementation in `google-research/frechet-audio-distance`
-
-|                              |   baseline vs test1   |     baseline vs test2    |
-|:----------------------------:|:---------------------:|:------------------------:|
-|        `google-research`     |          12.4375      |           4.7680         |
-|    `frechet_audio_distance`  |          12.7398      |           4.9815         |
-
-**Test 2: Distorted sine waves on PANN**
-
-|                              |   baseline vs test1   |     baseline vs test2    |
-|:----------------------------:|:---------------------:|:------------------------:|
-|    `frechet_audio_distance`  |        0.000465       |          0.00008594      |
-
-### References
+Original FAD implementation: https://github.com/gudgud96/frechet-audio-distance
 
 VGGish in PyTorch: https://github.com/harritaylor/torchvggish
 
 Frechet distance implementation: https://github.com/mseitzer/pytorch-fid
 
 Frechet Audio Distance paper: https://arxiv.org/abs/1812.08466
-
-PANN paper: https://arxiv.org/abs/1912.10211

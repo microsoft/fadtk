@@ -220,7 +220,7 @@ class FrechetAudioDistance:
         
         return mu, cov
 
-    def score(self, background_dir, eval_dir):
+    def score(self, background_dir: Path | str, eval_dir: Path | str):
         """
         Calculate a single FAD score between a background and an eval set.
         """
