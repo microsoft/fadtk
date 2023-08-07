@@ -13,7 +13,7 @@ from hypy_utils.nlp_utils import substr_between
 from hypy_utils.logging_utils import setup_logger
 
 from .model_loader import ModelLoader
-from .utils import calculate_embd_statistics_online
+from .utils import *
 
 log = setup_logger()
 
@@ -79,14 +79,6 @@ def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
 
     return (diff.dot(diff) + np.trace(cov1)
             + np.trace(cov2) - 2 * tr_covmean)
-
-
-def find_sox_formats(sox_path: str) -> list[str]:
-    """
-    Find a list of file formats supported by SoX
-    """
-    out = subprocess.check_output((sox_path, "-h")).decode()
-    return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
 
 
 class FrechetAudioDistance:
@@ -318,15 +310,42 @@ class FrechetAudioDistance:
             # Make sure to add a small constant to the denominator to avoid division by zero.
             sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
 
+        def _find_z_helper(f):
+            # Load embedding
+            embd = self.read_embedding_file(f)
+            try:
+
+                if mode == 'individual':
+                    # Calculate FAD for individual songs
+                    mu_eval, cov_eval = calc_embd_statistics(embd)
+                    if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
+                        log.info(f"{f} is incorrect", embd.shape)
+                    return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
+                
+                elif mode == 'z':
+                    # Calculate z-score matrix
+                    zs = (embd - mu) / sigma
+                    
+                    # Calculate mean abs z score
+                    return np.mean(np.abs(zs))
+                
+                else:
+                    raise ValueError(f"Invalid mode {mode}")
+
+            except Exception as e:
+                log.info(f)
+                log.info(self.ml.name)
+                return None
+
         if mode != 'delta':
             # 3. Calculate z score for each eval file
             eval_dir = Path(eval_dir)
             _files = [eval_dir / f for f in os.listdir(eval_dir)]
             _files = [f for f in _files if f.is_file()]
 
-            args = [(self, f, mu, cov, sigma, mode) for f in _files]
+            # args = [(self, f, mu, cov, sigma, mode) for f in _files]
             
-            scores = pmap(_find_z_helper, args, desc=f"Calculating {mode} scores...", max_workers=self.audio_load_worker)
+            scores = tmap(_find_z_helper, _files, desc=f"Calculating {mode} scores...", max_workers=self.audio_load_worker)
             scores = np.array(scores)
         
         else:
@@ -351,32 +370,3 @@ class FrechetAudioDistance:
         pairs = [p for p in pairs if p[1] is not None]
         pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
         write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
-
-
-def _find_z_helper(args):
-    fad, f, mu, cov, sigma, mode = args
-    # Load embedding
-    embd = fad.read_embedding_file(f)
-    try:
-
-        if mode == 'individual':
-            # Calculate FAD for individual songs
-            mu_eval, cov_eval = calc_embd_statistics(embd)
-            if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
-                log.info(f"{f} is incorrect", embd.shape)
-            return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
-        
-        elif mode == 'z':
-            # Calculate z-score matrix
-            zs = (embd - mu) / sigma
-            
-            # Calculate mean abs z score
-            return np.mean(np.abs(zs))
-        
-        else:
-            raise ValueError(f"Invalid mode {mode}")
-
-    except Exception as e:
-        log.info(f)
-        log.info(fad.ml.name)
-        return None

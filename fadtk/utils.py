@@ -1,6 +1,8 @@
 from pathlib import Path
+import subprocess
 import numpy as np
 
+from hypy_utils.nlp_utils import substr_between
 from hypy_utils.tqdm_utils import pmap
 
 
@@ -36,3 +38,11 @@ def calculate_embd_statistics_online(files: list[Path]) -> tuple[np.ndarray, np.
     else:
         cov = S / (n - 1)  # compute the covariance matrix
         return mu, cov
+    
+
+def find_sox_formats(sox_path: str) -> list[str]:
+    """
+    Find a list of file formats supported by SoX
+    """
+    out = subprocess.check_output((sox_path, "-h")).decode()
+    return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
