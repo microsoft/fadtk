@@ -28,5 +28,5 @@ if __name__ == "__main__":
     args = agupa.parse_args()
     model = models[args.model]
 
-    cache_embeddings_files(args.directory, model, workers=args.workers, sox_path=args.sox_path)
+    cache_embeddings_files(args.directory, lambda: model, workers=args.workers, sox_path=args.sox_path)
     
