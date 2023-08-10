@@ -18,6 +18,8 @@ def calculate_embd_statistics_online(files: list[Path]) -> tuple[np.ndarray, np.
 
     :param files: A list of npy files containing ndarrays with shape (n_frames, n_features)
     """
+    assert len(files) > 0, "No files provided"
+
     # Load the first file to get the embedding dimension
     embd_dim = np.load(files[0]).shape[-1]
 
