@@ -8,15 +8,7 @@ if __name__ == "__main__":
     """
     Launcher for running FAD on two directories using a model.
     """
-    models = [
-        CLAPLaionModel('audio'), CLAPLaionModel('music'),
-        VGGishModel(), 
-        *(MERTModel(layer=v) for v in range(1, 13)),
-        EncodecEmbModel('24k'), EncodecEmbModel('48k'), 
-        DACModel(),
-        CdpamModel('acoustic'), CdpamModel('content'),
-    ]
-    models = {m.name: m for m in models}
+    models = {m.name: m for m in get_all_models()}
 
     agupa = ArgumentParser()
     # Two positional arguments: model and two directories

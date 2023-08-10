@@ -370,3 +370,14 @@ class CdpamModel(ModelLoader):
         x  = np.float32(x)
         
         return x
+
+
+def get_all_models() -> list[ModelLoader]:
+    return [
+        CLAPLaionModel('audio'), CLAPLaionModel('music'),
+        VGGishModel(), 
+        *(MERTModel(layer=v) for v in range(1, 13)),
+        EncodecEmbModel('24k'), EncodecEmbModel('48k'), 
+        DACModel(),
+        CdpamModel('acoustic'), CdpamModel('content'),
+    ]
