@@ -25,5 +25,5 @@ if __name__ == "__main__":
 
     fad = FrechetAudioDistance(model, audio_load_worker=args.workers, sox_path=args.sox_path, load_model=False)
     log.info("FAD computed.")
-    log.info(f"The FAD score between {args.baseline_dir} and {args.eval_dir} is: {fad.score(args.baseline_dir, args.eval_dir)}")
+    log.info(f"The FAD {model.name} score between {args.baseline_dir} and {args.eval_dir} is: {fad.score(args.baseline_dir, args.eval_dir)}")
     
