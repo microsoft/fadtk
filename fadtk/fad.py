@@ -246,6 +246,8 @@ class FrechetAudioDistance:
         if csv.exists():
             log.info(f"CSV file {csv} already exists, exitting...")
             return
+        
+        log.info(f"Calculating FAD for different n for {self.ml.name} on {eval_dir}...")
 
         # 1. Load background embeddings
         mu_background, cov_background = self.load_stats(background_dir)
@@ -275,7 +277,7 @@ class FrechetAudioDistance:
                 indices = np.random.choice(np.concatenate(embd_list, axis=0).shape[0], size=n, replace=True)
                 embds_eval = np.concatenate(embd_list, axis=0)[indices]
 
-            log.info(f"Selected eval shape {embds_eval.shape}")
+            # log.info(f"Selected eval shape {embds_eval.shape}")
             
             mu_eval, cov_eval = calc_embd_statistics(embds_eval)
 
