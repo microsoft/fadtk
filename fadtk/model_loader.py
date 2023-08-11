@@ -278,47 +278,6 @@ class MERTModel(ModelLoader):
             out = out[self.layer] # [timeframes, 768]
 
         return out
-
-    def _get_embedding2(self, audio: np.ndarray) -> np.ndarray:
-        window_length = int(self.sr * 60) # 60 seconds
-        overlap_length = int(self.sr * 4.987) # 4.987 seconds
-        overlap_frames = int(4.987 * 75) - 1 # 75 Hz frame rate
-        embeddings = []
-
-        print("Audio shape:", audio.shape)
-        print("Window length:", window_length)
-        print("Overlap length:", overlap_length)
-        print("Overlap frames:", overlap_frames)
-
-        # Iterate over audio with overlap
-        for start in range(0, audio.shape[0], window_length - overlap_length):
-            end = start + window_length
-            segment = audio[start:end]
-            print("Segment:", segment.shape)
-            # if len(segment) < window_length:
-            #     break
-
-            # Process each segment
-            inputs = self.processor(segment, sampling_rate=self.sr, return_tensors="pt").to(self.device)
-            with torch.no_grad():
-                out = self.model(**inputs, output_hidden_states=True)
-                out = torch.stack(out.hidden_states).squeeze() # [13 layers, timeframes, 768]
-                out = out[self.layer] # [timeframes, 768]
-                
-                print("Frames before:", out.shape[0])
-
-                # Remove overlap from the end of the segment
-                if end < audio.shape[0]:
-                    out = out[:-overlap_frames, :]
-
-                print("Frames after:", out.shape[0])
-
-            embeddings.append(out)
-
-        # Stack embeddings for all segments
-        out = torch.cat(embeddings, dim=0)
-
-        return out
     
 
 class CLAPLaionModel(ModelLoader):
