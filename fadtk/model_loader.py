@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import logging
 import math
 from typing import Literal
 import numpy as np
@@ -11,6 +12,9 @@ from pathlib import Path
 from hypy_utils.downloader import download_file
 import torch.nn.functional as F
 from audiotools import AudioSignal
+
+
+log = logging.getLogger(__name__)
 
 
 class ModelLoader(ABC):
@@ -246,10 +250,11 @@ class MERTModel(ModelLoader):
 
     Please specify the layer to use (1-12).
     """
-    def __init__(self, size='v1-95M', layer=12):
+    def __init__(self, size='v1-95M', layer=12, limit_minutes=9):
         super().__init__(f"MERT-{size}" + ("" if layer == 12 else f"-{layer}"), 768, 24000)
         self.huggingface_id = f"m-a-p/MERT-{size}"
         self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
         
     def load_model(self):
         from transformers import Wav2Vec2FeatureExtractor
@@ -261,6 +266,11 @@ class MERTModel(ModelLoader):
         self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
         inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
         with torch.no_grad():
             out = self.model(**inputs, output_hidden_states=True)
