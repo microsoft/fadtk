@@ -250,7 +250,7 @@ class MERTModel(ModelLoader):
 
     Please specify the layer to use (1-12).
     """
-    def __init__(self, size='v1-95M', layer=12, limit_minutes=9):
+    def __init__(self, size='v1-95M', layer=12, limit_minutes=6):
         super().__init__(f"MERT-{size}" + ("" if layer == 12 else f"-{layer}"), 768, 24000)
         self.huggingface_id = f"m-a-p/MERT-{size}"
         self.layer = layer
