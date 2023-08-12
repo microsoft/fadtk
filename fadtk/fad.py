@@ -228,68 +228,6 @@ class FrechetAudioDistance:
         mu_eval, cov_eval = self.load_stats(eval_dir)
 
         return calc_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
-
-    def score_different_n(self, background_dir, eval_dir, csv_name: str, per_n: bool, per_song: bool, steps: int = 25, min_inv = 0.0002, max_idx = -1):
-        """
-        Calculate FAD for different n (number of samples) from the eval set.
-
-        :param background_dir: directory with background audio files
-        :param eval_dir: directory with eval audio files
-        :param csv_name: name of the csv file to save the results
-        :param per_n: if True, use equally distance n, otherwise use equally distance 1/n
-        :param steps: number of steps to use
-        :param per_song: if True, n means number of songs, otherwise n means number of feature frames
-        :param min_inv: minimum 1/n to use
-        :param max_idx: maximum feature frame index of the eval set to use, -1 means use all
-        """
-        csv = Path('data/fad') / str(min_inv) / self.ml.name / ('n-songs' if per_song else 'n-frames') / ('per-n' if per_n else 'per-ninv') / csv_name
-        if csv.exists():
-            log.info(f"CSV file {csv} already exists, exitting...")
-            return
-        
-        log.info(f"Calculating FAD for different n for {self.ml.name} on {eval_dir}...")
-
-        # 1. Load background embeddings
-        mu_background, cov_background = self.load_stats(background_dir)
-        
-        eval_dir = Path(eval_dir)
-        embd_list, files = self.load_embeddings(eval_dir, max_count=max_idx, concat=False)
-        
-        # Calculate maximum n
-        if per_song:
-            max_n = len(embd_list)
-        else:
-            max_n = sum(len(embed) for embed in embd_list)
-
-        # Generate list of ns to use
-        if per_n:
-            ns = [int(n) for n in np.linspace(int(1 / min_inv), max_n, steps)]
-        else: 
-            ns = [int(1 / inv) for inv in np.linspace(1 / max_n, min_inv, steps)]
-
-        results = []
-        for n in tq(ns, desc="Calculating FAD for different n"):
-            if per_song:
-                # Select n songs randomly (with replacement)
-                embds_eval = np.concatenate(random.choices(embd_list, k=n), axis=0)
-            else:
-                # Select n feature frames randomly (with replacement)
-                indices = np.random.choice(np.concatenate(embd_list, axis=0).shape[0], size=n, replace=True)
-                embds_eval = np.concatenate(embd_list, axis=0)[indices]
-
-            # log.info(f"Selected eval shape {embds_eval.shape}")
-            
-            mu_eval, cov_eval = calc_embd_statistics(embds_eval)
-
-            fad_score = calc_frechet_distance(mu_background, cov_background, mu_eval, cov_eval)
-
-            # Add to results
-            results.append([n, fad_score])
-
-            # Write results to csv
-            write(csv, "\n".join([",".join([str(x) for x in row]) for row in results]))
-
-
     
     def find_z_songs(self, background_dir, eval_dir, csv_name: str, mode: Literal['z', 'individual', 'delta'] = 'delta'):
         """
