@@ -132,29 +132,19 @@ class FrechetAudioDistance:
                 subprocess.run([self.sox_path, f, *sox_args, new])
 
         return self.ml.load_wav(new)
-    
-    def get_cache_embedding_path(self, audio_dir: str | Path) -> Path:
-        """
-        Get the path to the cached embedding npy file for an audio file.
-        """
-        return Path(audio_dir).parent / "embeddings" / self.ml.name / audio_dir.with_suffix(".npy").name
 
     def cache_embedding_file(self, audio_dir: str | Path):
         """
         Compute embedding for an audio file and cache it to a file.
         """
-        cache = self.get_cache_embedding_path(audio_dir)
+        cache = get_cache_embedding_path(self.ml.name, audio_dir)
 
         if cache.exists():
             return
 
-        # Load file
+        # Load file, get embedding, save embedding
         wav_data = self.load_audio(audio_dir)
-        
-        # Compute embedding
         embd = self.ml.get_embedding(wav_data)
-        
-        # Save embedding
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.save(cache, embd)
 
@@ -162,7 +152,7 @@ class FrechetAudioDistance:
         """
         Read embedding from a cached file.
         """
-        cache = self.get_cache_embedding_path(audio_dir)
+        cache = get_cache_embedding_path(self.ml.name, audio_dir)
         assert cache.exists(), f"Embedding file {cache} does not exist, please run cache_embedding_file first."
         return np.load(cache)
     
@@ -170,11 +160,7 @@ class FrechetAudioDistance:
         """
         Load embeddings for all audio files in a directory.
         """
-        dir = Path(dir)
-
-        # List valid audio files
-        files = [dir / f for f in os.listdir(dir)]
-        files = [f for f in files if f.is_file()]
+        files = list(Path(dir).glob("*.*"))
         log.info(f"Loading {len(files)} audio files from {dir}...")
 
         return self._load_embeddings(files, max_count=max_count, concat=concat)
@@ -201,20 +187,30 @@ class FrechetAudioDistance:
         else:
             return embd_lst, files
     
-    def load_stats(self, dir: str | Path):
+    def load_stats(self, path: PathLike):
         """
         Load embedding statistics from a directory.
         """
-        dir = Path(dir)
-        cache_dir = dir / "stats" / self.ml.name
-        emb_dir = dir / "embeddings" / self.ml.name
+        path = Path(path)
+
+        # Check if path is a file
+        if path.is_file():
+            # Load it as a npz
+            log.info(f"Loading embedding statistics from {path}...")
+            with np.load(path) as data:
+                if f'{self.ml.name}.mu' not in data or f'{self.ml.name}.cov' not in data:
+                    raise ValueError(f"FAD statistics file {path} doesn't contain data for model {self.ml.name}")
+                return data[f'{self.ml.name}.mu'], data[f'{self.ml.name}.cov']
+
+        cache_dir = path / "stats" / self.ml.name
+        emb_dir = path / "embeddings" / self.ml.name
         if cache_dir.exists():
-            log.info(f"Embedding statistics is already cached for {dir}, loading...")
+            log.info(f"Embedding statistics is already cached for {path}, loading...")
             mu = np.load(cache_dir / "mu.npy")
             cov = np.load(cache_dir / "cov.npy")
             return mu, cov
 
-        log.info(f"Loading embedding files from {dir}...")
+        log.info(f"Loading embedding files from {path}...")
         
         mu, cov = calculate_embd_statistics_online(list(emb_dir.glob("*.npy")))
         log.info("> Embeddings statistics calculated.")
@@ -226,27 +222,30 @@ class FrechetAudioDistance:
         
         return mu, cov
 
-    def score(self, background_dir: Path | str, eval_dir: Path | str):
+    def score(self, baseline: PathLike, eval: PathLike):
         """
         Calculate a single FAD score between a background and an eval set.
+
+        :param baseline: Baseline matrix or directory containing baseline audio files
+        :param eval: Eval matrix or directory containing eval audio files
         """
-        mu_bg, cov_bg = self.load_stats(background_dir)
-        mu_eval, cov_eval = self.load_stats(eval_dir)
+        mu_bg, cov_bg = self.load_stats(baseline)
+        mu_eval, cov_eval = self.load_stats(eval)
 
         return calc_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
 
-    def fadinf(self, baseline_dir: Path, eval_files: list[Path], steps: int = 25, min_n = 500):
+    def score_inf(self, baseline: PathLike, eval_files: list[Path], steps: int = 25, min_n = 500):
         """
         Calculate FAD for different n (number of samples) and compute FAD-inf.
 
-        :param baseline_dir: directory with baseline audio files
+        :param baseline: Baseline matrix or directory containing baseline audio files
         :param eval_files: list of eval audio files
         :param steps: number of steps to use
         :param min_n: minimum n to use
         """
         log.info(f"Calculating FAD-inf for {self.ml.name}...")
         # 1. Load background embeddings
-        mu_base, cov_base = self.load_stats(baseline_dir)
+        mu_base, cov_base = self.load_stats(baseline)
         # If all of the embedding files end in .npy, we can load them directly
         if all([f.suffix == '.npy' for f in eval_files]):
             embeds = [np.load(f) for f in eval_files]
@@ -280,11 +279,14 @@ class FrechetAudioDistance:
         # Since intercept is the FAD-inf, we can just return it
         return intercept, slope
     
-    def score_individual(self, background_dir: PathLike, eval_dir: PathLike, csv_name: str):
+    def score_individual(self, baseline: PathLike, eval_dir: PathLike, csv_name: str) -> Path:
         """
         Calculate the FAD score for each individual file in eval_dir and write the results to a csv file.
 
-        
+        :param baseline: Baseline matrix or directory containing baseline audio files
+        :param eval_dir: Directory containing eval audio files
+        :param csv_name: Name of the csv file to write the results to
+        :return: Path to the csv file
         """
         csv = Path('data') / f'fad-individual' / self.ml.name / csv_name
         if csv.exists():
@@ -292,7 +294,7 @@ class FrechetAudioDistance:
             return
 
         # 1. Load background embeddings
-        mu, cov = self.load_stats(background_dir)
+        mu, cov = self.load_stats(baseline)
 
         # 2. Define helper function for calculating z score
         def _find_z_helper(f):

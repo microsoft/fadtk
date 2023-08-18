@@ -51,3 +51,14 @@ def find_sox_formats(sox_path: str) -> list[str]:
     """
     out = subprocess.check_output((sox_path, "-h")).decode()
     return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
+
+
+def get_cache_embedding_path(model: str, audio_dir: PathLike) -> Path:
+    """
+    Get the path to the cached embedding npy file for an audio file.
+
+    :param model: The name of the model
+    :param audio_dir: The path to the audio file
+    """
+    audio_dir = Path(audio_dir)
+    return audio_dir.parent / "embeddings" / model / audio_dir.with_suffix(".npy").name
