@@ -36,10 +36,10 @@ if __name__ == "__main__":
     # 2. Calculate FAD
     fad = FrechetAudioDistance(model, audio_load_worker=args.workers, sox_path=args.sox_path, load_model=False)
     if args.inf:
-        assert eval.is_dir(), "FAD-inf requires a directory as the evaluation dataset"
-        score = fad.score_inf(baseline, eval)
+        assert Path(eval).is_dir(), "FAD-inf requires a directory as the evaluation dataset"
+        score = fad.score_inf(baseline, list(Path(eval).glob('*.*')))
     elif args.indiv:
-        assert eval.is_dir(), "Individual FAD requires a directory as the evaluation dataset"
+        assert Path(eval).is_dir(), "Individual FAD requires a directory as the evaluation dataset"
         fad.score_individual(baseline, eval, Path(args.indiv))
         log.info(f"Individual FAD scores saved to {args.indiv}")
         exit(0)

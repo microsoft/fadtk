@@ -169,6 +169,9 @@ class FrechetAudioDistance:
         """
         Load embeddings for a list of audio files.
         """
+        if len(files) == 0:
+            raise ValueError("No files provided")
+
         # Load embeddings
         if max_count == -1:
             embd_lst = tmap(self.read_embedding_file, files, desc="Loading audio files...", max_workers=self.audio_load_worker)
@@ -195,12 +198,6 @@ class FrechetAudioDistance:
             # Check if it's a pre-computed statistic file
             bp = Path(__file__).parent / "stats"
             stats = bp / (path.lower() + ".npz")
-            print(stats)
-            if stats.exists():
-                path = stats
-
-            # Sometimes people use - instead of _ in the path
-            stats = bp / (path.lower().replace('-', '_') + ".npz")
             print(stats)
             if stats.exists():
                 path = stats
@@ -306,6 +303,7 @@ class FrechetAudioDistance:
         :param csv_name: Name of the csv file to write the results to
         :return: Path to the csv file
         """
+        csv = Path(csv_name)
         if isinstance(csv_name, str):
             csv = Path('data') / f'fad-individual' / self.ml.name / csv_name
         if csv.exists():
