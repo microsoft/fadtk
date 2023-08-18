@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from .model_loader import *
 from .fad_batch import cache_embedding_files
 
-if __name__ == "__main__":
+def main():
     """
     Launcher for caching embeddings of directories using multiple models.
     """
@@ -25,3 +25,7 @@ if __name__ == "__main__":
         for d in args.dirs:
             log.info(f"Caching embeddings for {d} using {model.name}")
             cache_embedding_files(d, model, workers=args.workers, sox_path=args.sox_path)
+
+            
+if __name__ == "__main__":
+    main()

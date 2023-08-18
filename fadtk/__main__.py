@@ -4,7 +4,8 @@ from .fad import FrechetAudioDistance, log
 from .model_loader import *
 from .fad_batch import cache_embedding_files
 
-if __name__ == "__main__":
+
+def main():
     """
     Launcher for running FAD on two directories using a model.
     """
@@ -49,4 +50,7 @@ if __name__ == "__main__":
     # 3. Print results    
     log.info("FAD computed.")
     log.info(f"The FAD {model.name} score between {baseline} and {eval} is: {score}")
-    
+
+
+if __name__ == "__main__":
+    main()    

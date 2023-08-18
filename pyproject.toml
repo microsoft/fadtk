@@ -26,7 +26,6 @@ nnaudio = "^0.3.2"
 [tool.poetry.scripts]
 fadtk = "fadtk.__main__:main"
 fadtk-embeds = "fadtk.embeds.__main__:main"
-fadtk-pkg = "fadtk.package.__main__:main"
 
 
 [build-system]
