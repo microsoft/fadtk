@@ -6,13 +6,16 @@ from hypy_utils.nlp_utils import substr_between
 from hypy_utils.tqdm_utils import pmap
 
 
-def _process_file(file: Path):
+PathLike = str | Path
+
+
+def _process_file(file: PathLike):
     embd = np.load(file)
     n = embd.shape[0]
     return np.mean(embd, axis=0), np.cov(embd, rowvar=False) * (n - 1), n
 
 
-def calculate_embd_statistics_online(files: list[Path]) -> tuple[np.ndarray, np.ndarray]:
+def calculate_embd_statistics_online(files: list[PathLike]) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the mean and covariance matrix of a list of embeddings in an online manner.
 
