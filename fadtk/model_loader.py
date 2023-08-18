@@ -314,10 +314,6 @@ class CLAPLaionModel(ModelLoader):
         x = np.clip(x, a_min=-1., a_max=1.)
         return (x * 32767.).astype(np.int16)
 
-    def load_wav(self, wav_file: Path):
-        wav_data, _ = librosa.load(wav_file, sr=self.sr)
-        return wav_data
-
 
 class CdpamModel(ModelLoader):
     """
@@ -350,7 +346,7 @@ class CdpamModel(ModelLoader):
         return emb
 
     def load_wav(self, wav_file: Path):
-        x, _  = librosa.load(wav_file, sr=22050)
+        x, _  = librosa.load(wav_file, sr=self.sr)
         
         # Convert to 16 bit floating point
         x = np.round(x.astype(np.float) * 32768)
