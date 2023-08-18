@@ -234,6 +234,51 @@ class FrechetAudioDistance:
         mu_eval, cov_eval = self.load_stats(eval_dir)
 
         return calc_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
+
+    def fadinf(self, baseline_dir: Path, eval_files: list[Path], steps: int = 25, min_n = 500):
+        """
+        Calculate FAD for different n (number of samples) and compute FAD-inf.
+
+        :param baseline_dir: directory with baseline audio files
+        :param eval_files: list of eval audio files
+        :param steps: number of steps to use
+        :param min_n: minimum n to use
+        """
+        log.info(f"Calculating FAD-inf for {self.ml.name}...")
+        # 1. Load background embeddings
+        mu_base, cov_base = self.load_stats(baseline_dir)
+        # If all of the embedding files end in .npy, we can load them directly
+        if all([f.suffix == '.npy' for f in eval_files]):
+            embeds = [np.load(f) for f in eval_files]
+            embeds = np.concatenate(embeds, axis=0)
+        else:
+            embeds = self._load_embeddings(eval_files, concat=True)
+        
+        # Calculate maximum n
+        max_n = len(embeds)
+
+        # Generate list of ns to use
+        ns = [int(n) for n in np.linspace(min_n, max_n, steps)]
+        
+        results = []
+        for n in tq(ns, desc="Calculating FAD-inf"):
+            # Select n feature frames randomly (with replacement)
+            indices = np.random.choice(embeds.shape[0], size=n, replace=True)
+            embds_eval = embeds[indices]
+            
+            mu_eval, cov_eval = calc_embd_statistics(embds_eval)
+            fad_score = calc_frechet_distance(mu_base, cov_base, mu_eval, cov_eval)
+
+            # Add to results
+            results.append([n, fad_score])
+
+        # Compute FAD-inf based on linear regression of 1/n
+        ys = np.array(results)
+        xs = 1 / np.array(ns)
+        slope, intercept = np.polyfit(xs, ys[:, 1], 1)
+
+        # Since intercept is the FAD-inf, we can just return it
+        return intercept, slope
     
     def find_z_songs(self, background_dir, eval_dir, csv_name: str, mode: Literal['z', 'individual', 'delta'] = 'delta'):
         """
