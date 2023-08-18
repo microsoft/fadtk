@@ -99,7 +99,7 @@ We also include some sample code and data from the paper in this repo.
 
 * The method we used to create GPT4 one-shot prompts for these generation can be found in [example/prompts](example/prompts).
 
-[fma_pop_tracks.csv](): This file contains the subset of 4839 song IDs and metadata information for the FMA-Pop subset we proposed in our paper. After downloading the Free Music Archive dataset from the [original source](https://github.com/mdeff/fma), you can easily locate the audio files for this FMA-Pop subset using song IDs.
+[fma_pop_tracks.csv](datasets/fma_pop_tracks.csv): This file contains the subset of 4839 song IDs and metadata information for the FMA-Pop subset we proposed in our paper. After downloading the Free Music Archive dataset from the [original source](https://github.com/mdeff/fma), you can easily locate the audio files for this FMA-Pop subset using song IDs.
 
 ### Sample Code
 
