@@ -11,7 +11,7 @@ from torch import nn
 from pathlib import Path
 from hypy_utils.downloader import download_file
 import torch.nn.functional as F
-from audiotools import AudioSignal
+import importlib.util
 
 
 log = logging.getLogger(__name__)
@@ -173,8 +173,11 @@ class DACModel(ModelLoader):
         self.model.eval()
         self.model.to(self.device)
 
-    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+    def _get_embedding(self, audio) -> np.ndarray:
+        from audiotools import AudioSignal
         import time
+
+        audio: AudioSignal
 
         # Set variables
         win_len = 5.0
@@ -216,8 +219,8 @@ class DACModel(ModelLoader):
         return emb
 
     def load_wav(self, wav_file: Path):
-        audio = AudioSignal(wav_file)
-        return audio
+        from audiotools import AudioSignal
+        return AudioSignal(wav_file)
 
 
 class MERTModel(ModelLoader):
@@ -254,7 +257,7 @@ class MERTModel(ModelLoader):
             out = out[self.layer] # [timeframes, 768]
 
         return out
-    
+
 
 class CLAPLaionModel(ModelLoader):
     """
@@ -358,11 +361,17 @@ class CdpamModel(ModelLoader):
 
 
 def get_all_models() -> list[ModelLoader]:
-    return [
+    ms = [
         CLAPLaionModel('audio'), CLAPLaionModel('music'),
         VGGishModel(), 
         *(MERTModel(layer=v) for v in range(1, 13)),
         EncodecEmbModel('24k'), EncodecEmbModel('48k'), 
-        DACModel(),
-        CdpamModel('acoustic'), CdpamModel('content'),
+        # DACModel(),
+        # CdpamModel('acoustic'), CdpamModel('content'),
     ]
+    if importlib.util.find_spec("dac") is not None:
+        ms.append(DACModel())
+    if importlib.util.find_spec("cdpam") is not None:
+        ms += [CdpamModel('acoustic'), CdpamModel('content')]
+
+    return ms
