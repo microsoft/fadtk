@@ -80,18 +80,17 @@ class VGGishModel(ModelLoader):
         return self.model.forward(audio, self.sr)
         
 
-ENCODEC_DEFAULT_VARIANT = '24k'
-
-
-class EncodecBaseModel(ModelLoader):
+class EncodecEmbModel(ModelLoader):
     """
     Encodec model from https://github.com/facebookresearch/encodec
+
+    Thiss version uses the embedding outputs (continuous values of 128 features).
     """
-    def __init__(self, name: str, variant: Literal['48k', '24k'] = ENCODEC_DEFAULT_VARIANT):
-        super().__init__(name if variant == '24k' else f"{name}-{variant}", 128,
+    def __init__(self, variant: Literal['48k', '24k'] = '24k'):
+        super().__init__('encodec-emb' if variant == '24k' else f"encodec-emb-{variant}", 128,
                          sr=24000 if variant == '24k' else 48000)
         self.variant = variant
-    
+
     def load_model(self):
         from encodec import EncodecModel
         if self.variant == '48k':
@@ -101,44 +100,6 @@ class EncodecBaseModel(ModelLoader):
             self.model = EncodecModel.encodec_model_24khz()
             self.model.set_target_bandwidth(12)
         self.model.to(self.device)
-
-    
-    def load_wav(self, wav_file: Path):
-        import torchaudio
-        from encodec.utils import convert_audio
-
-        wav, sr = torchaudio.load(wav_file)
-        wav = convert_audio(wav, sr, self.sr, self.model.channels)
-
-        # If it's longer than 3 minutes, cut it
-        if wav.shape[1] > 3 * 60 * self.sr:
-            wav = wav[:, :3 * 60 * self.sr]
-
-        return wav.unsqueeze(0)
-
-
-class EncodecQuantModel(EncodecBaseModel):
-    """
-    This version uses the quantized outputs (discrete values of n quantizers).
-    """
-    def __init__(self):
-        super().__init__("encodec", '24k')
-
-    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
-        with torch.no_grad():
-            frames = self.model.encode(audio.to(self.device))
-            frames = torch.cat([e[0] for e in frames], dim=-1) # [batch_size, n_quantizers, timeframes]
-            frames = frames[0] # [n_quantizers, timeframes]
-            frames = frames.transpose(0, 1) # [timeframes, n_quantizers]
-            return frames
-
-
-class EncodecEmbModel(EncodecBaseModel):
-    """
-    Thiss version uses the embedding outputs (continuous values of 128 features).
-    """
-    def __init__(self, variant: Literal['48k', '24k'] = '48k'):
-        super().__init__("encodec-emb", variant)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         segment_length = self.model.segment_length
@@ -172,6 +133,19 @@ class EncodecEmbModel(EncodecBaseModel):
             emb = emb[0] # [128, timeframes]
             emb = emb.transpose(0, 1) # [timeframes, 128]
             return emb
+    
+    def load_wav(self, wav_file: Path):
+        import torchaudio
+        from encodec.utils import convert_audio
+
+        wav, sr = torchaudio.load(wav_file)
+        wav = convert_audio(wav, sr, self.sr, self.model.channels)
+
+        # If it's longer than 3 minutes, cut it
+        if wav.shape[1] > 3 * 60 * self.sr:
+            wav = wav[:, :3 * 60 * self.sr]
+
+        return wav.unsqueeze(0)
         
     def _decode_frame(self, emb: np.ndarray) -> np.ndarray:
         with torch.no_grad():
