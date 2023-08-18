@@ -1,21 +1,25 @@
-import os
-import random
 import subprocess
 import tempfile
-from typing import Literal
+from typing import NamedTuple
 import numpy as np
 import torch
 from scipy import linalg
 from pathlib import Path
 from hypy_utils import write
-from hypy_utils.tqdm_utils import tq, tmap, pmap
-from hypy_utils.nlp_utils import substr_between
+from hypy_utils.tqdm_utils import tq, tmap
 from hypy_utils.logging_utils import setup_logger
 
 from .model_loader import ModelLoader
 from .utils import *
 
 log = setup_logger()
+
+
+class FADInfResults(NamedTuple):
+    score: float
+    slope: float
+    r2: float
+    points: list[tuple[int, float]]
 
 
 def calc_embd_statistics(embd_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -249,7 +253,7 @@ class FrechetAudioDistance:
 
         return calc_frechet_distance(mu_bg, cov_bg, mu_eval, cov_eval)
 
-    def score_inf(self, baseline: PathLike, eval_files: list[Path], steps: int = 25, min_n = 500):
+    def score_inf(self, baseline: PathLike, eval_files: list[Path], steps: int = 25, min_n = 500, raw: bool = False):
         """
         Calculate FAD for different n (number of samples) and compute FAD-inf.
 
@@ -257,6 +261,7 @@ class FrechetAudioDistance:
         :param eval_files: list of eval audio files
         :param steps: number of steps to use
         :param min_n: minimum n to use
+        :param raw: return raw results in addition to FAD-inf
         """
         log.info(f"Calculating FAD-inf for {self.ml.name}...")
         # 1. Load background embeddings
@@ -291,8 +296,11 @@ class FrechetAudioDistance:
         xs = 1 / np.array(ns)
         slope, intercept = np.polyfit(xs, ys[:, 1], 1)
 
+        # Compute R^2
+        r2 = 1 - np.sum((ys[:, 1] - (slope * xs + intercept)) ** 2) / np.sum((ys[:, 1] - np.mean(ys[:, 1])) ** 2)
+
         # Since intercept is the FAD-inf, we can just return it
-        return intercept, slope
+        return FADInfResults(score=intercept, slope=slope, r2=r2, points=results)
     
     def score_individual(self, baseline: PathLike, eval_dir: PathLike, csv_name: Path | str) -> Path:
         """
