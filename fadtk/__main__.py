@@ -20,16 +20,17 @@ if __name__ == "__main__":
     agupa.add_argument('-w', '--workers', type=int, default=8)
     agupa.add_argument('-s', '--sox-path', type=str, default='/usr/bin/sox')
     agupa.add_argument('--inf', action='store_true', help="Use FAD-inf extrapolation")
+    agupa.add_argument('--indiv', type=str, help="Calculate FAD for individual songs and store the results in the given file")
 
     args = agupa.parse_args()
     model = models[args.model]
 
-    baseline = Path(args.baseline)
-    eval = Path(args.eval)
+    baseline = args.baseline
+    eval = args.eval
 
     # 1. Calculate embedding files for each dataset
     for d in [baseline, eval]:
-        if d.is_dir():
+        if Path(d).is_dir():
             cache_embedding_files(d, model, workers=args.workers, sox_path=args.sox_path)
     
     # 2. Calculate FAD
@@ -37,6 +38,11 @@ if __name__ == "__main__":
     if args.inf:
         assert eval.is_dir(), "FAD-inf requires a directory as the evaluation dataset"
         score = fad.score_inf(baseline, eval)
+    elif args.indiv:
+        assert eval.is_dir(), "Individual FAD requires a directory as the evaluation dataset"
+        fad.score_individual(baseline, eval, Path(args.indiv))
+        log.info(f"Individual FAD scores saved to {args.indiv}")
+        exit(0)
     else:
         score = fad.score(baseline, eval)
 

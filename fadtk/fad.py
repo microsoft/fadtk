@@ -191,6 +191,20 @@ class FrechetAudioDistance:
         """
         Load embedding statistics from a directory.
         """
+        if isinstance(path, str):
+            # Check if it's a pre-computed statistic file
+            bp = Path(__file__).parent / "stats"
+            stats = bp / (path.lower() + ".npz")
+            print(stats)
+            if stats.exists():
+                path = stats
+
+            # Sometimes people use - instead of _ in the path
+            stats = bp / (path.lower().replace('-', '_') + ".npz")
+            print(stats)
+            if stats.exists():
+                path = stats
+
         path = Path(path)
 
         # Check if path is a file
@@ -209,6 +223,10 @@ class FrechetAudioDistance:
             mu = np.load(cache_dir / "mu.npy")
             cov = np.load(cache_dir / "cov.npy")
             return mu, cov
+        
+        if not path.is_dir():
+            log.error(f"The dataset you want to use ({path}) is not a directory nor a file.")
+            exit(1)
 
         log.info(f"Loading embedding files from {path}...")
         
@@ -279,7 +297,7 @@ class FrechetAudioDistance:
         # Since intercept is the FAD-inf, we can just return it
         return intercept, slope
     
-    def score_individual(self, baseline: PathLike, eval_dir: PathLike, csv_name: str) -> Path:
+    def score_individual(self, baseline: PathLike, eval_dir: PathLike, csv_name: Path | str) -> Path:
         """
         Calculate the FAD score for each individual file in eval_dir and write the results to a csv file.
 
@@ -288,7 +306,8 @@ class FrechetAudioDistance:
         :param csv_name: Name of the csv file to write the results to
         :return: Path to the csv file
         """
-        csv = Path('data') / f'fad-individual' / self.ml.name / csv_name
+        if isinstance(csv_name, str):
+            csv = Path('data') / f'fad-individual' / self.ml.name / csv_name
         if csv.exists():
             log.info(f"CSV file {csv} already exists, exitting...")
             return
