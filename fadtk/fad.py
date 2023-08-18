@@ -177,6 +177,12 @@ class FrechetAudioDistance:
         files = [f for f in files if f.is_file()]
         log.info(f"Loading {len(files)} audio files from {dir}...")
 
+        return self._load_embeddings(files, max_count=max_count, concat=concat)
+
+    def _load_embeddings(self, files: list[Path], max_count: int = -1, concat: bool = True):
+        """
+        Load embeddings for a list of audio files.
+        """
         # Load embeddings
         if max_count == -1:
             embd_lst = tmap(self.read_embedding_file, files, desc="Loading audio files...", max_workers=self.audio_load_worker)
