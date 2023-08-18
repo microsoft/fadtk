@@ -89,7 +89,7 @@ class YourModel(ModelLoader):
         return super().load_wav(wav_file)
 ```
 
-## 0x03. Published Data and Code
+## 0x04. Published Data and Code
 
 We also include some sample code and data from the paper in this repo.
 
@@ -105,7 +105,7 @@ We also include some sample code and data from the paper in this repo.
 
 
 
-## 0x04. Special Thanks
+## 0x05. Special Thanks
 
 **Immense gratitude to the foundational repository [gudgud96/frechet-audio-distance](https://github.com/gudgud96/frechet-audio-distance) - "A lightweight library for Frechet Audio Distance calculation"**. Much of our project has been adapted and enhanced from gudgud96's contributions. In honor of this work, we've retained the [original MIT license](example/LICENSE_gudgud96).
 
