@@ -280,11 +280,13 @@ class FrechetAudioDistance:
         # Since intercept is the FAD-inf, we can just return it
         return intercept, slope
     
-    def find_z_songs(self, background_dir, eval_dir, csv_name: str, mode: Literal['z', 'individual', 'delta'] = 'delta'):
+    def score_individual(self, background_dir: PathLike, eval_dir: PathLike, csv_name: str):
         """
-        Find songs with the minimum or maximum z scores.
+        Calculate the FAD score for each individual file in eval_dir and write the results to a csv file.
+
+        
         """
-        csv = Path('data') / f'fad-{mode}' / self.ml.name / csv_name
+        csv = Path('data') / f'fad-individual' / self.ml.name / csv_name
         if csv.exists():
             log.info(f"CSV file {csv} already exists, exitting...")
             return
@@ -292,72 +294,26 @@ class FrechetAudioDistance:
         # 1. Load background embeddings
         mu, cov = self.load_stats(background_dir)
 
-        sigma = None
-        if mode == 'z':
-            # Compute the standard deviation for each feature.
-            # Assuming the covariance matrix is diagonal, the standard deviations are the square root of the diagonal elements.
-            sigma = np.sqrt(np.diagonal(cov))
-
-            # Make sure to add a small constant to the denominator to avoid division by zero.
-            sigma = np.where(sigma != 0, sigma, np.finfo(float).eps)
-
+        # 2. Define helper function for calculating z score
         def _find_z_helper(f):
-            # Load embedding
-            embd = self.read_embedding_file(f)
             try:
-
-                if mode == 'individual':
-                    # Calculate FAD for individual songs
-                    mu_eval, cov_eval = calc_embd_statistics(embd)
-                    if mu_eval.shape == 1 or cov_eval.shape[0] == 1:
-                        log.info(f"{f} is incorrect", embd.shape)
-                    return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
-                
-                elif mode == 'z':
-                    # Calculate z-score matrix
-                    zs = (embd - mu) / sigma
-                    
-                    # Calculate mean abs z score
-                    return np.mean(np.abs(zs))
-                
-                else:
-                    raise ValueError(f"Invalid mode {mode}")
+                # Calculate FAD for individual songs
+                embd = self.read_embedding_file(f)
+                mu_eval, cov_eval = calc_embd_statistics(embd)
+                return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
 
             except Exception as e:
-                log.info(f)
-                log.info(self.ml.name)
-                return None
+                log.error(f"An error occurred calculating individual FAD using model {self.ml.name} on file {f}")
+                log.error(e)
 
-        if mode != 'delta':
-            # 3. Calculate z score for each eval file
-            eval_dir = Path(eval_dir)
-            _files = [eval_dir / f for f in os.listdir(eval_dir)]
-            _files = [f for f in _files if f.is_file()]
+        # 3. Calculate z score for each eval file
+        _files = list(Path(eval_dir).glob("*.*"))
+        scores = tmap(_find_z_helper, _files, desc=f"Calculating scores", max_workers=self.audio_load_worker)
 
-            # args = [(self, f, mu, cov, sigma, mode) for f in _files]
-            
-            scores = tmap(_find_z_helper, _files, desc=f"Calculating {mode} scores...", max_workers=self.audio_load_worker)
-            scores = np.array(scores)
-        
-        else:
-            # Delta mode cannot be parallelized because of memory constraints
-            # Loop through each index, make a shallow copy, remove it from the eval set, calculate the FAD score
-            embd_list, _files = self.load_embeddings(eval_dir, concat=False)
-            embd_list = embd_list[:500]
-            _files = _files[:500]
-            fad_original = calc_frechet_distance(mu, cov, *calc_embd_statistics(np.concatenate(embd_list, axis=0)))
-
-            scores = []
-            for i in tq(range(len(embd_list)), desc="Calculating delta scores"):
-                # Shallow copy
-                embd_list_copy = embd_list.copy()
-                embd_list_copy.pop(i)
-                mu_eval, cov_eval = calc_embd_statistics(np.concatenate(embd_list_copy, axis=0))
-                scores.append(calc_frechet_distance(mu, cov, mu_eval, cov_eval) - fad_original)
-
-        # Write the sorted z scores to csv
+        # 4. Write the sorted z scores to csv
         pairs = list(zip(_files, scores))
-        # Filter out nones
         pairs = [p for p in pairs if p[1] is not None]
         pairs = sorted(pairs, key=lambda x: np.abs(x[1]))
         write(csv, "\n".join([",".join([str(x).replace(',', '_') for x in row]) for row in pairs]))
+
+        return csv
