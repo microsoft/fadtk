@@ -18,16 +18,15 @@ log = logging.getLogger(__name__)
 
 
 class ModelLoader(ABC):
+    """
+    Abstract class for loading a model and getting embeddings from it. The model should be loaded in the `load_model` method.
+    """
     def __init__(self, name: str, num_features: int, sr: int):
         self.model = None
         self.sr = sr
         self.num_features = num_features
         self.name = name
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-    @abstractmethod
-    def load_model(self):
-        pass
 
     def get_embedding(self, audio: np.ndarray):
         embd = self._get_embedding(audio)
@@ -40,6 +39,10 @@ class ModelLoader(ABC):
             embd = embd.astype(np.float16)
 
         return embd
+
+    @abstractmethod
+    def load_model(self):
+        pass
 
     @abstractmethod
     def _get_embedding(self, audio: np.ndarray):
@@ -81,6 +84,9 @@ ENCODEC_DEFAULT_VARIANT = '24k'
 
 
 class EncodecBaseModel(ModelLoader):
+    """
+    Encodec model from https://github.com/facebookresearch/encodec
+    """
     def __init__(self, name: str, variant: Literal['48k', '24k'] = ENCODEC_DEFAULT_VARIANT):
         super().__init__(name if variant == '24k' else f"{name}-{variant}", 128,
                          sr=24000 if variant == '24k' else 48000)
@@ -113,8 +119,6 @@ class EncodecBaseModel(ModelLoader):
 
 class EncodecQuantModel(EncodecBaseModel):
     """
-    Encodec model from https://github.com/facebookresearch/encodec
-
     This version uses the quantized outputs (discrete values of n quantizers).
     """
     def __init__(self):
@@ -131,8 +135,6 @@ class EncodecQuantModel(EncodecBaseModel):
 
 class EncodecEmbModel(EncodecBaseModel):
     """
-    Encodec model from https://github.com/facebookresearch/encodec
-
     Thiss version uses the embedding outputs (continuous values of 128 features).
     """
     def __init__(self, variant: Literal['48k', '24k'] = '48k'):
@@ -344,6 +346,9 @@ class CLAPLaionModel(ModelLoader):
 
 
 class CdpamModel(ModelLoader):
+    """
+    CDPAM model from https://github.com/pranaymanocha/PerceptualAudio/tree/master/cdpam
+    """
     def __init__(self, mode: Literal['acoustic', 'content']) -> None:
         super().__init__(f"cdpam-{mode}", 512, 22050)
         self.mode = mode
