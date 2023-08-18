@@ -1,33 +1,34 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "fadtk"
-version = "0.1.0"
-authors = [
-  { name="Hao Hao Tan", email="helloharry66@gmail.com" },
-]
-description = "A lightweight library of Frechet Audio Distance calculation."
+version = "1.0.0"
+description = "A simple and standardized library for Frechet Audio Distance calculation."
+authors = ["Azalea <me@hydev.org>"]
 readme = "README.md"
-license = { file="LICENSE" }
-requires-python = ">=3.7"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-]
-dependencies = [
-  'numpy',
-  'torch',
-  'scipy',
-  'tqdm',
-  'soundfile',
-  'resampy',
-  'hypy_utils',
-  'encodec',
-  'nnAudio'
-]
+homepage = "https://github.com/Microsoft/fadtk"
+repository = "https://github.com/Microsoft/fadtk"
 
-[project.urls]
-"Homepage" = "https://github.com/gudgud96/frechet-audio-distance"
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+numpy = "^1.23.5"
+pandas = "^2.0.3"
+scipy = "^1.11.2"
+hypy-utils = "^1.0.19"
+soundfile = "^0.12.1"
+wheel = "^0.41.1"
+llvmlite = "^0.40.1"
+numba = "^0.57.1"
+librosa = "^0.10.1"
+encodec = "^0.1.1"
+transformers = "^4.31.0"
+laion-clap = "^1.1.4"
+nnaudio = "^0.3.2"
+
+[tool.poetry.scripts]
+fadtk = "fadtk.__main__:main"
+fadtk-embeds = "fadtk.embeds.__main__:main"
+fadtk-pkg = "fadtk.package.__main__:main"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
