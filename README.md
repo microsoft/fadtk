@@ -2,24 +2,65 @@
 
 A simple and standardized library for Frechet Audio Distance (FAD) calculation. This library is published along with the paper _Improving Frechet Audio Distance for Generative Music Evaluation_ (link coming soon). The datasets associated with this paper and sample code tools used in the paper are also available under this repository.
 
-## 0x01. Toolkit Usage
+## 0x01. Installation
 
 To use the FAD toolkit, you must first install it. This library is tested on Python 3.11 on Linux but should work on Python >3.9 and on Windows as well.
 
-`pip install fadtk`
+1. Install torch https://pytorch.org/
+2. `pip install fadtk`
 
-### Command Line Usage
+### Optional Dependencies
+
+Optionally, you can install dependencies that add additional embedding support. They are:
+
+* CDPAM: `pip install cdpam`
+* DAC: `pip install descript-audio-codec==1.0.0`
+
+## 0x02. Command Line Usage
+
+```sh
+# Evaluation
+fadtk <model_name> <baseline> <evaluation-set> [--inf/--indiv]
+
+# Compute embeddings
+fadtk.embeds -m <models...> -d <datasets...>
+```
+#### Example 1: Computing FAD_inf scores on FMA_Pop baseline
+  
+```sh
+# Compute FAD-inf between the baseline and evaluation datasets on two different models
+fadtk clap-laion-audio fma_pop /path/to/evaluation/audio --inf
+fadtk encodec-emb fma_pop /path/to/evaluation/audio --inf
+```
+
+#### Example 2: Compute individual FAD scores for each song
+
+```sh
+fadtk encodec-emb fma_pop /path/to/evaluation/audio --indiv scores.csv
+```
+
+#### Example 3: Compute FAD scores with your own baseline
 
 First, create two directories, one for the baseline and one for the evaluation, and place *only* the audio files in them. Then, run the following commands:
 
 ```sh
-# Compute embeddings for the baseline dataset
-python3 -m fadtk.embds MODEL-NAME /path/to/baseline/audio
-# Compute embeddings for the evaluation dataset (test set)
-python3 -m fadtk.embds MODEL-NAME /path/to/evaluation/audio
 # Compute FAD between the baseline and evaluation datasets
-python3 -m fadtk.score MODEL-NAME /path/to/baseline/audio /path/to/evaluation/audio
+fadtk clap-laion-audio /path/to/baseline/audio /path/to/evaluation/audio
 ```
+
+#### Example 4: Just compute embeddings
+
+If you only want to compute embeddings with a list of specific models for a list of dataset, you can do that using the command line.
+
+```sh
+fadtk.embeds -m Model1 Model2 -d /dataset1 /dataset2
+```
+
+## 0x03. Programmatic Usage
+
+### Doing the above in python
+
+If you want to know how to do the above command-line processes in python, you can check out how our launchers are implemented ([\_\_main\_\_.py](fadtk/__main__.py) and [embeds.py](fadtk/embeds.py))
 
 ### Adding New Embeddings
 
@@ -48,7 +89,7 @@ class YourModel(ModelLoader):
         return super().load_wav(wav_file)
 ```
 
-## 0x02. Published Data and Code
+## 0x03. Published Data and Code
 
 We also include some sample code and data from the paper in this repo.
 
@@ -63,7 +104,8 @@ We also include some sample code and data from the paper in this repo.
 ### Sample Code
 
 
-## 0x03. Special Thanks
+
+## 0x04. Special Thanks
 
 **Immense gratitude to the foundational repository [gudgud96/frechet-audio-distance](https://github.com/gudgud96/frechet-audio-distance) - "A lightweight library for Frechet Audio Distance calculation"**. Much of our project has been adapted and enhanced from gudgud96's contributions. In honor of this work, we've retained the [original MIT license](example/LICENSE_gudgud96).
 
