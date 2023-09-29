@@ -1,12 +1,13 @@
 from pathlib import Path
 import subprocess
 import numpy as np
+from typing import Union
 
 from hypy_utils.nlp_utils import substr_between
 from hypy_utils.tqdm_utils import pmap
 
 
-PathLike = str | Path
+PathLike = Union[str, Path]
 
 
 def _process_file(file: PathLike):

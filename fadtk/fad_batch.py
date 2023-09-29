@@ -1,7 +1,7 @@
 import multiprocessing
 import os
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Union
 import numpy as np
 
 import torch
@@ -22,7 +22,7 @@ def _cache_embedding_batch(args):
         fad.cache_embedding_file(f)
 
 
-def cache_embedding_files(files: list[Path] | str | Path, ml: ModelLoader, workers: int = 8, **kwargs):
+def cache_embedding_files(files: Union[list[Path], str, Path], ml: ModelLoader, workers: int = 8, **kwargs):
     """
     Get embeddings for all audio files in a directory.
 
