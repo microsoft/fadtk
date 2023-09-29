@@ -1,9 +1,10 @@
 import subprocess
 import tempfile
-from typing import NamedTuple
+from typing import NamedTuple, Union
 import numpy as np
 import torch
 from scipy import linalg
+from scipy import sqrt as scisqrt
 from pathlib import Path
 from hypy_utils import write
 from hypy_utils.tqdm_utils import tq, tmap
@@ -64,7 +65,14 @@ def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
     diff = mu1 - mu2
 
     # Product might be almost singular
-    covmean, _ = linalg.sqrtm(cov1.dot(cov2), disp=False)
+    # NOTE: issues with sqrtm for newer scipy versions
+    # using eigenvalue method as workaround
+    covmean_sqrtm, _ = linalg.sqrtm(cov1.dot(cov2), disp=False)
+    
+    # eigenvalue method
+    D, V = linalg.eig(cov1.dot(cov2))
+    covmean = (V * scisqrt(D)) @ linalg.inv(V)
+
     if not np.isfinite(covmean).all():
         msg = ('fid calculation produces singular product; '
             'adding %s to diagonal of cov estimates') % eps
@@ -80,6 +88,12 @@ def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
         covmean = covmean.real
 
     tr_covmean = np.trace(covmean)
+    tr_covmean_sqrtm = np.trace(covmean_sqrtm)
+    if np.iscomplexobj(tr_covmean_sqrtm):
+        if np.abs(tr_covmean_sqrtm.imag) < 1e-3:
+            tr_covmean_sqrtm = tr_covmean_sqrtm.real
+    if not(np.iscomplexobj(tr_covmean_sqrtm)):
+        assert np.abs(tr_covmean - tr_covmean_sqrtm) < 1e-3
 
     return (diff.dot(diff) + np.trace(cov1)
             + np.trace(cov2) - 2 * tr_covmean)
@@ -102,7 +116,7 @@ class FrechetAudioDistance:
         # Disable gradient calculation because we're not training
         torch.autograd.set_grad_enabled(False)
 
-    def load_audio(self, f: str | Path):
+    def load_audio(self, f: Union[str, Path]):
         f = Path(f)
 
         # Create a directory for storing normalized audio files
@@ -137,7 +151,7 @@ class FrechetAudioDistance:
 
         return self.ml.load_wav(new)
 
-    def cache_embedding_file(self, audio_dir: str | Path):
+    def cache_embedding_file(self, audio_dir: Union[str, Path]):
         """
         Compute embedding for an audio file and cache it to a file.
         """
@@ -152,7 +166,7 @@ class FrechetAudioDistance:
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.save(cache, embd)
 
-    def read_embedding_file(self, audio_dir: str | Path):
+    def read_embedding_file(self, audio_dir: Union[str, Path]):
         """
         Read embedding from a cached file.
         """
@@ -160,7 +174,7 @@ class FrechetAudioDistance:
         assert cache.exists(), f"Embedding file {cache} does not exist, please run cache_embedding_file first."
         return np.load(cache)
     
-    def load_embeddings(self, dir: str | Path, max_count: int = -1, concat: bool = True):
+    def load_embeddings(self, dir: Union[str, Path], max_count: int = -1, concat: bool = True):
         """
         Load embeddings for all audio files in a directory.
         """
@@ -302,7 +316,7 @@ class FrechetAudioDistance:
         # Since intercept is the FAD-inf, we can just return it
         return FADInfResults(score=intercept, slope=slope, r2=r2, points=results)
     
-    def score_individual(self, baseline: PathLike, eval_dir: PathLike, csv_name: Path | str) -> Path:
+    def score_individual(self, baseline: PathLike, eval_dir: PathLike, csv_name: Union[Path, str]) -> Path:
         """
         Calculate the FAD score for each individual file in eval_dir and write the results to a csv file.
 
@@ -315,8 +329,8 @@ class FrechetAudioDistance:
         if isinstance(csv_name, str):
             csv = Path('data') / f'fad-individual' / self.ml.name / csv_name
         if csv.exists():
-            log.info(f"CSV file {csv} already exists, exitting...")
-            return
+            log.info(f"CSV file {csv} already exists, exiting...")
+            return csv
 
         # 1. Load background embeddings
         mu, cov = self.load_stats(baseline)
