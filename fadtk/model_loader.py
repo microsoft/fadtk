@@ -360,6 +360,68 @@ class CdpamModel(ModelLoader):
         return x
 
 
+class CLAPModel(ModelLoader):
+    """
+    CLAP model from https://github.com/microsoft/CLAP
+    """
+    def __init__(self, type: Literal['sep23']):
+        super().__init__(f"clap-{type}", 1024, 44100)
+        self.type = type
+
+        if type == 'sep23':
+            url = '/home/hagamper/CLAP/sep23/model/best.pth'
+
+        #self.model_file = Path(__file__).parent / ".model-checkpoints" / url.split('/')[-1]
+        self.model_file = Path(url)
+
+        # Download file if it doesn't exist
+        if not self.model_file.exists():
+            self.model_file.parent.mkdir(parents=True, exist_ok=True)
+            download_file(url, self.model_file)
+
+    def load_model(self):
+        from CLAP_API import CLAP
+        
+        self.model = CLAP(self.model_file, version = 'sep23', use_cuda=self.device == torch.device('cuda'))
+        #self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        audio = audio.reshape(1, -1)
+
+        # The int16-float32 conversion is used for quantization
+        #audio = self.int16_to_float32(self.float32_to_int16(audio))
+
+        # Split the audio into 7s chunks with 1s hop
+        chunk_size = 7 * self.sr  # 10 seconds
+        hop_size = self.sr  # 1 second
+        chunks = [audio[:, i:i+chunk_size] for i in range(0, audio.shape[1], hop_size)]
+
+        # zero-pad chunks to make equal length
+        clen = [x.shape[1] for x in chunks]
+        chunks = [np.pad(ch, ((0,0), (0,np.max(clen) - ch.shape[1]))) for ch in chunks]
+
+        self.model.default_collate(chunks)
+
+        # Calculate embeddings for each chunk
+        embeddings = []
+        for chunk in chunks:
+            with torch.no_grad():
+                chunk = chunk if chunk.shape[1] == chunk_size else np.pad(chunk, ((0,0), (0, chunk_size-chunk.shape[1])))
+                chunk = torch.from_numpy(chunk).float().to(self.device)
+                emb = self.model.clap.audio_encoder(chunk)[0]
+                embeddings.append(emb)
+
+        # Concatenate the embeddings
+        emb = torch.cat(embeddings, dim=0) # [timeframes, 1024]
+        return emb
+
+    def int16_to_float32(self, x):
+        return (x / 32767.0).astype(np.float32)
+
+    def float32_to_int16(self, x):
+        x = np.clip(x, a_min=-1., a_max=1.)
+        return (x * 32767.).astype(np.int16)
+
 def get_all_models() -> list[ModelLoader]:
     ms = [
         CLAPLaionModel('audio'), CLAPLaionModel('music'),
