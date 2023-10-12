@@ -364,12 +364,12 @@ class CLAPModel(ModelLoader):
     """
     CLAP model from https://github.com/microsoft/CLAP
     """
-    def __init__(self, type: Literal['sep23']):
+    def __init__(self, type: Literal['2023']):
         super().__init__(f"clap-{type}", 1024, 44100)
         self.type = type
 
-        if type == 'sep23':
-            url = '/home/hagamper/CLAP/sep23/model/best.pth'
+        if type == '2023':
+            url = 'https://huggingface.co/microsoft/msclap/resolve/main/CLAP_weights_2023.pth'
 
         #self.model_file = Path(__file__).parent / ".model-checkpoints" / url.split('/')[-1]
         self.model_file = Path(url)
@@ -382,7 +382,7 @@ class CLAPModel(ModelLoader):
     def load_model(self):
         from CLAP_API import CLAP
         
-        self.model = CLAP(self.model_file, version = 'sep23', use_cuda=self.device == torch.device('cuda'))
+        self.model = CLAP(self.model_file, version = self.type, use_cuda=self.device == torch.device('cuda'))
         #self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
@@ -424,6 +424,7 @@ class CLAPModel(ModelLoader):
 
 def get_all_models() -> list[ModelLoader]:
     ms = [
+        CLAPModel('2023'),
         CLAPLaionModel('audio'), CLAPLaionModel('music'),
         VGGishModel(), 
         *(MERTModel(layer=v) for v in range(1, 13)),
