@@ -371,8 +371,7 @@ class CLAPModel(ModelLoader):
         if type == '2023':
             url = 'https://huggingface.co/microsoft/msclap/resolve/main/CLAP_weights_2023.pth'
 
-        #self.model_file = Path(__file__).parent / ".model-checkpoints" / url.split('/')[-1]
-        self.model_file = Path(url)
+        self.model_file = Path(__file__).parent / ".model-checkpoints" / url.split('/')[-1]
 
         # Download file if it doesn't exist
         if not self.model_file.exists():
