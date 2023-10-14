@@ -379,7 +379,7 @@ class CLAPModel(ModelLoader):
             download_file(url, self.model_file)
 
     def load_model(self):
-        from CLAP_API import CLAP
+        from msclap import CLAP
         
         self.model = CLAP(self.model_file, version = self.type, use_cuda=self.device == torch.device('cuda'))
         #self.model.to(self.device)
