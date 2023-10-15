@@ -2,12 +2,17 @@
 
 A simple and standardized library for Frechet Audio Distance (FAD) calculation. This library is published along with the paper _Improving Frechet Audio Distance for Generative Music Evaluation_ (link coming soon). The datasets associated with this paper and sample code tools used in the paper are also available under this repository.
 
+You can listen to audio samples of per-song FAD outliers on the online demo here: https://fadtk.hydev.org/
+
 ## 0x01. Installation
 
 To use the FAD toolkit, you must first install it. This library is tested on Python 3.11 on Linux but should work on Python >3.9 and on Windows as well.
 
 1. Install torch https://pytorch.org/
 2. `pip install fadtk`
+3. Install [ffmpeg](https://ffmpeg.org/) and [SoX](https://sox.sourceforge.net/) using your system's package manager (e.g. [brew](https://brew.sh/) for macOS, apt for Ubuntu, etc.)
+
+For Windows users: Please make sure ffmpeg and SoX are installed and placed in $PATH.
 
 ### Optional Dependencies
 
