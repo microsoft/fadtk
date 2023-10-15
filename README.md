@@ -4,6 +4,25 @@ A simple and standardized library for Frechet Audio Distance (FAD) calculation. 
 
 You can listen to audio samples of per-song FAD outliers on the online demo here: https://fadtk.hydev.org/
 
+## 0x00. Features
+
+* Easily and efficiently compute audio embeddings with various models.
+* Compute FAD∞ scores between two datasets for evaluation.
+* Use pre-computed statistics ("weights") to compute FAD∞ scores from existing baselines.
+* Compute per-song FAD to find outliers in the dataset
+
+### Supported Models
+
+| Model | Name in FADtk | Description | Creator |
+| --- | --- | --- | --- |
+| [CLAP](https://github.com/microsoft/CLAP) | `clap-2023` | Learning audio concepts from natural language supervision | Microsoft |
+| [CLAP](https://github.com/LAION-AI/CLAP) | `clap-laion-{audio/music}` | Contrastive Language-Audio Pretraining | LAION |
+| [Encodec](https://github.com/facebookresearch/encodec) | `encodec-emb` | State-of-the-art deep learning based audio codec | Facebook/Meta Research |
+| [MERT](https://huggingface.co/m-a-p/MERT-v1-95M) | `MERT-v1-95M-{layer}` | Acoustic Music Understanding Model with Large-Scale Self-supervised Training | m-a-p |
+| [VGGish](https://github.com/tensorflow/models/blob/master/research/audioset/vggish/README.md) | `vggish` | Audio feature classification embedding | Google |
+| [DAC](https://github.com/descriptinc/descript-audio-codec) | `dac-44kHz` | High-Fidelity Audio Compression with Improved RVQGAN | Descript |
+| [CDPAM](https://github.com/pranaymanocha/PerceptualAudio) | `cdpam-{acoustic/content}` | Contrastive learning-based Deep Perceptual Audio Metric | Pranay Manocha et al. |
+
 ## 0x01. Installation
 
 To use the FAD toolkit, you must first install it. This library is tested on Python 3.11 on Linux but should work on Python >3.9 and on Windows as well.
