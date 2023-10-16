@@ -82,7 +82,25 @@ If you only want to compute embeddings with a list of specific models for a list
 fadtk.embeds -m Model1 Model2 -d /dataset1 /dataset2
 ```
 
-## 0x03. Programmatic Usage
+## 0x03. Best Practices
+
+When using the FAD toolkit to compute FAD scores, it's essential to consider the following best practices to ensure accuracy and relevancy in your findings.
+
+1. **Choose a Meaningful Reference Set**: Do not default to commonly used reference sets like Musiccaps without consideration. Select a reference set that aligns with the specific goal of your research. For generative music, we recommend using the FMA-Pop subset as proposed in our paper.
+2. **Select an Appropriate Embedding**: The choice of embedding can heavily influence the scoring. For instance, VGGish is optimized for classification, and it might not be the most suitable if your objective is to measure aspects like quality.
+3. **Provide Comprehensive Reporting**: Ensure that you detail all test statistics including:
+   * The chosen reference set.
+   * The selected embedding.
+   * The number of samples and their duration in both the reference and test set.
+     
+   This level of transparency ensures that the FAD scores' context and potential variability are understood by readers or users.
+4. **Benchmark Against the State-of-the-Art**: When making comparisons, use the same setup as the state-of-the-art methods. Without a consistent setup, the FAD comparison might lose its significance.
+5. **Interpret FAD Scores Contextually**: You should calculate per-song FAD scores and take the time to listen to the outliers. This will give you a hands-on understanding of what your current setup is capturing, and what "low" and "high" FAD scores signify in the context of your study.
+
+By adhering to these best practices, you ensure that your use of the FAD tool is both methodologically sound and contextually relevant.
+
+
+## 0x04. Programmatic Usage
 
 ### Doing the above in python
 
@@ -115,7 +133,7 @@ class YourModel(ModelLoader):
         return super().load_wav(wav_file)
 ```
 
-## 0x04. Published Data and Code
+## 0x05. Published Data and Code
 
 We also include some sample code and data from the paper in this repo.
 
@@ -131,7 +149,7 @@ We also include some sample code and data from the paper in this repo.
 
 
 
-## 0x05. Special Thanks
+## 0x06. Special Thanks
 
 **Immense gratitude to the foundational repository [gudgud96/frechet-audio-distance](https://github.com/gudgud96/frechet-audio-distance) - "A lightweight library for Frechet Audio Distance calculation"**. Much of our project has been adapted and enhanced from gudgud96's contributions. In honor of this work, we've retained the [original MIT license](example/LICENSE_gudgud96).
 
