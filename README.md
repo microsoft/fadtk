@@ -84,20 +84,20 @@ fadtk.embeds -m Model1 Model2 -d /dataset1 /dataset2
 
 ## 0x03. Best Practices
 
-When using the FAD toolkit to compute FAD scores, it's essential to consider the following best practices to ensure accuracy and relevancy in your findings.
+When using the FAD toolkit to compute FAD scores, it's essential to consider the following best practices to ensure accuracy and relevancy in the reported findings.
 
-1. **Choose a Meaningful Reference Set**: Do not default to commonly used reference sets like Musiccaps without consideration. Select a reference set that aligns with the specific goal of your research. For generative music, we recommend using the FMA-Pop subset as proposed in our paper.
-2. **Select an Appropriate Embedding**: The choice of embedding can heavily influence the scoring. For instance, VGGish is optimized for classification, and it might not be the most suitable if your objective is to measure aspects like quality.
-3. **Provide Comprehensive Reporting**: Ensure that you detail all test statistics including:
+1. **Choose a Meaningful Reference Set**: Do not default to commonly used reference sets like Musiccaps without consideration. A reference set that aligns with the specific goal of the research should be chosen. For generative music, we recommend using the FMA-Pop subset as proposed in our paper.
+2. **Select an Appropriate Embedding**: The choice of embedding can heavily influence the scoring. For instance, VGGish is optimized for classification, and it might not be the most suitable if the research objective is to measure aspects like quality.
+3. **Provide Comprehensive Reporting**: Ensure that all test statistics are included in the report:
    * The chosen reference set.
    * The selected embedding.
    * The number of samples and their duration in both the reference and test set.
      
    This level of transparency ensures that the FAD scores' context and potential variability are understood by readers or users.
-4. **Benchmark Against the State-of-the-Art**: When making comparisons, you should ideally use the same setup to assess the state-of-the-art models for comparison. Without a consistent setup, the FAD comparison might lose its significance.
-5. **Interpret FAD Scores Contextually**: You should calculate per-song FAD scores and take the time to listen to the outliers. This will give you a hands-on understanding of what your current setup is capturing, and what "low" and "high" FAD scores signify in the context of your study.
+4. **Benchmark Against the State-of-the-Art**: When making comparisons, researchers should ideally use the same setup to assess the state-of-the-art models for comparison. Without a consistent setup, the FAD comparison might lose its significance.
+5. **Interpret FAD Scores Contextually**: Per-sample FAD scores should be calculated. Listening to the per-sample outliers will provide a hands-on understanding of what the current setup is capturing, and what "low" and "high" FAD scores signify in the context of the study.
 
-By adhering to these best practices, you ensure that your use of the FAD tool is both methodologically sound and contextually relevant.
+By adhering to these best practices, the use of our FAD toolkit can be ensured to be both methodologically sound and contextually relevant.
 
 
 ## 0x04. Programmatic Usage
