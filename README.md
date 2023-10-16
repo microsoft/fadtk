@@ -94,7 +94,7 @@ When using the FAD toolkit to compute FAD scores, it's essential to consider the
    * The number of samples and their duration in both the reference and test set.
      
    This level of transparency ensures that the FAD scores' context and potential variability are understood by readers or users.
-4. **Benchmark Against the State-of-the-Art**: When making comparisons, use the same setup as the state-of-the-art methods. Without a consistent setup, the FAD comparison might lose its significance.
+4. **Benchmark Against the State-of-the-Art**: When making comparisons, you should ideally use the same setup to assess the state-of-the-art models for comparison. Without a consistent setup, the FAD comparison might lose its significance.
 5. **Interpret FAD Scores Contextually**: You should calculate per-song FAD scores and take the time to listen to the outliers. This will give you a hands-on understanding of what your current setup is capturing, and what "low" and "high" FAD scores signify in the context of your study.
 
 By adhering to these best practices, you ensure that your use of the FAD tool is both methodologically sound and contextually relevant.
