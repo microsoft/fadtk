@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 from typing import NamedTuple, Union
@@ -14,6 +15,8 @@ from .model_loader import ModelLoader
 from .utils import *
 
 log = setup_logger()
+sox_path = os.environ.get('SOX_PATH', 'sox')
+ffmpeg_path = os.environ.get('FFMPEG_PATH', 'ffmpeg')
 
 
 class FADInfResults(NamedTuple):
@@ -103,10 +106,9 @@ class FrechetAudioDistance:
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     loaded = False
 
-    def __init__(self, ml: ModelLoader, audio_load_worker=8, sox_path="sox", load_model=True):
+    def __init__(self, ml: ModelLoader, audio_load_worker=8, load_model=True):
         self.ml = ml
         self.audio_load_worker = audio_load_worker
-        self.sox_path = sox_path
         self.sox_formats = find_sox_formats(sox_path)
 
         if load_model:
@@ -138,16 +140,16 @@ class FrechetAudioDistance:
 
                     # Open ffmpeg process for format conversion
                     subprocess.run([
-                        "/usr/bin/ffmpeg", 
+                        ffmpeg_path, 
                         "-hide_banner", "-loglevel", "error", 
                         "-i", f, tmp])
                     
                     # Open sox process for resampling, taking input from ffmpeg's output
-                    subprocess.run([self.sox_path, tmp, *sox_args, new])
+                    subprocess.run([sox_path, tmp, *sox_args, new])
                     
             else:
                 # Use sox for resampling
-                subprocess.run([self.sox_path, f, *sox_args, new])
+                subprocess.run([sox_path, f, *sox_args, new])
 
         return self.ml.load_wav(new)
 

@@ -24,7 +24,7 @@ def main():
         model = models[model_name]
         for d in args.dirs:
             log.info(f"Caching embeddings for {d} using {model.name}")
-            cache_embedding_files(d, model, workers=args.workers, sox_path=args.sox_path)
+            cache_embedding_files(d, model, workers=args.workers)
 
             
 if __name__ == "__main__":

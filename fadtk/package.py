@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     # 1. Calculate embedding files for each model
     for model in models.values():
-        cache_embedding_files(args.directory, model, workers=args.workers, sox_path=args.sox_path)
+        cache_embedding_files(args.directory, model, workers=args.workers)
     
     # 2. Calculate statistics for each model
     data = {}

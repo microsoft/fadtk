@@ -32,10 +32,10 @@ def main():
     # 1. Calculate embedding files for each dataset
     for d in [baseline, eval]:
         if Path(d).is_dir():
-            cache_embedding_files(d, model, workers=args.workers, sox_path=args.sox_path)
+            cache_embedding_files(d, model, workers=args.workers)
     
     # 2. Calculate FAD
-    fad = FrechetAudioDistance(model, audio_load_worker=args.workers, sox_path=args.sox_path, load_model=False)
+    fad = FrechetAudioDistance(model, audio_load_worker=args.workers, load_model=False)
     if args.inf:
         assert Path(eval).is_dir(), "FAD-inf requires a directory as the evaluation dataset"
         score = fad.score_inf(baseline, list(Path(eval).glob('*.*')))

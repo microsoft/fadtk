@@ -33,6 +33,8 @@ To use the FAD toolkit, you must first install it. This library is tested on Pyt
 
 For Windows users: Please make sure ffmpeg and SoX are installed and placed in $PATH.
 
+If you want to use a version of ffmpeg or SoX that's different from the version in $PATH, you can set the `FFMPEG_PATH` and `SOX_PATH` environment variables before running the program.
+
 ### Optional Dependencies
 
 Optionally, you can install dependencies that add additional embedding support. They are:
