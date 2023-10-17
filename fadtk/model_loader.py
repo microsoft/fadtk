@@ -369,7 +369,7 @@ class CLAPModel(ModelLoader):
         self.type = type
 
         if type == '2023':
-            url = 'https://huggingface.co/microsoft/msclap/blob/main/CLAP_weights_2023.pth'
+            url = 'https://huggingface.co/microsoft/msclap/resolve/main/CLAP_weights_2023.pth'
 
         self.model_file = Path(__file__).parent / ".model-checkpoints" / url.split('/')[-1]
 
