@@ -19,9 +19,6 @@ if __name__ == '__main__':
     # Compute FAD score
     for model in get_all_models():
         csv = fp / 'fad_scores' / f'{model.name}.csv'
-        if model.name == 'clap-2023':
-            continue
-        
         if csv.is_file():
             continue
         
