@@ -1,6 +1,8 @@
 import os
+import shutil
 import subprocess
 import tempfile
+import traceback
 from typing import NamedTuple, Union
 import numpy as np
 import torch
@@ -17,6 +19,14 @@ from .utils import *
 log = setup_logger()
 sox_path = os.environ.get('SOX_PATH', 'sox')
 ffmpeg_path = os.environ.get('FFMPEG_PATH', 'ffmpeg')
+
+
+if not shutil.which(sox_path):
+    log.error(f"Could not find SoX executable at {sox_path}, please install SoX and set the SOX_PATH environment variable.")
+    exit(3)
+if not shutil.which(ffmpeg_path):
+    log.error(f"Could not find ffmpeg executable at {ffmpeg_path}, please install ffmpeg and set the FFMPEG_PATH environment variable.")
+    exit(3)
 
 
 class FADInfResults(NamedTuple):
@@ -346,6 +356,7 @@ class FrechetAudioDistance:
                 return calc_frechet_distance(mu, cov, mu_eval, cov_eval)
 
             except Exception as e:
+                traceback.print_exc()
                 log.error(f"An error occurred calculating individual FAD using model {self.ml.name} on file {f}")
                 log.error(e)
 
