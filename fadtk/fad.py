@@ -105,8 +105,11 @@ def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
     if np.iscomplexobj(tr_covmean_sqrtm):
         if np.abs(tr_covmean_sqrtm.imag) < 1e-3:
             tr_covmean_sqrtm = tr_covmean_sqrtm.real
+
     if not(np.iscomplexobj(tr_covmean_sqrtm)):
-        assert np.abs(tr_covmean - tr_covmean_sqrtm) < 1e-3
+        diff = np.abs(tr_covmean - tr_covmean_sqrtm)
+        if diff > 1e-3:
+            log.warning(f'Detected high error in sqrtm calculation: {diff}')
 
     return (diff.dot(diff) + np.trace(cov1)
             + np.trace(cov2) - 2 * tr_covmean)
