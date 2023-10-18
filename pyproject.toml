@@ -18,9 +18,11 @@ wheel = "^0.41.1"
 numba = "^0.58.0"
 librosa = "^0.10.1"
 encodec = "^0.1.1"
-transformers = "^4.31.0"
+transformers = "<=4.30.0"
 laion-clap = "^1.1.4"
 nnaudio = "^0.3.2"
+torch = "~2.1.0"
+resampy = "^0.4.2"
 
 [tool.poetry.scripts]
 fadtk = "fadtk.__main__:main"
