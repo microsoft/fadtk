@@ -157,3 +157,7 @@ tokens.toml
 /data/
 .syncthing*
 *.pt
+.model-checkpoints
+test/fad_scores
+test/samples/embeddings
+test/samples/convert
