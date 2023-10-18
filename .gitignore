@@ -161,3 +161,4 @@ tokens.toml
 test/fad_scores
 test/samples/embeddings
 test/samples/convert
+test/comparison.csv
