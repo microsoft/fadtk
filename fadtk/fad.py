@@ -22,12 +22,13 @@ sox_path = os.environ.get('SOX_PATH', 'sox')
 ffmpeg_path = os.environ.get('FFMPEG_PATH', 'ffmpeg')
 TORCHAUDIO_RESAMPLING = True
 
-if not shutil.which(sox_path):
-    log.error(f"Could not find SoX executable at {sox_path}, please install SoX and set the SOX_PATH environment variable.")
-    exit(3)
-if not shutil.which(ffmpeg_path):
-    log.error(f"Could not find ffmpeg executable at {ffmpeg_path}, please install ffmpeg and set the FFMPEG_PATH environment variable.")
-    exit(3)
+if not(TORCHAUDIO_RESAMPLING):
+    if not shutil.which(sox_path):
+        log.error(f"Could not find SoX executable at {sox_path}, please install SoX and set the SOX_PATH environment variable.")
+        exit(3)
+    if not shutil.which(ffmpeg_path):
+        log.error(f"Could not find ffmpeg executable at {ffmpeg_path}, please install ffmpeg and set the FFMPEG_PATH environment variable.")
+        exit(3)
 
 
 class FADInfResults(NamedTuple):
