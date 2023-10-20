@@ -141,6 +141,7 @@ class FrechetAudioDistance:
         new = (cache_dir / f.name).with_suffix(".wav")
 
         if not new.exists():
+            cache_dir.mkdir(parents=True, exist_ok=True)
             if TORCHAUDIO_RESAMPLING:
                 x, fsorig = torchaudio.load(f)
                 x = torch.mean(x,0).unsqueeze(0) # convert to mono
@@ -156,7 +157,6 @@ class FrechetAudioDistance:
                 torchaudio.save(new, y, self.ml.sr, encoding="PCM_S", bits_per_sample=16)
             else:                
                 sox_args = ['-r', str(self.ml.sr), '-c', '1', '-b', '16']
-                cache_dir.mkdir(parents=True, exist_ok=True)
     
                 # ffmpeg has bad resampling compared to SoX
                 # SoX has bad format support compared to ffmpeg
