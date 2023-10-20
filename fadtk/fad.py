@@ -6,6 +6,7 @@ import traceback
 from typing import NamedTuple, Union
 import numpy as np
 import torch
+import torchaudio
 from scipy import linalg
 from scipy import sqrt as scisqrt
 from pathlib import Path
@@ -19,7 +20,7 @@ from .utils import *
 log = setup_logger()
 sox_path = os.environ.get('SOX_PATH', 'sox')
 ffmpeg_path = os.environ.get('FFMPEG_PATH', 'ffmpeg')
-
+TORCHAUDIO_RESAMPLING = True
 
 if not shutil.which(sox_path):
     log.error(f"Could not find SoX executable at {sox_path}, please install SoX and set the SOX_PATH environment variable.")
@@ -139,30 +140,44 @@ class FrechetAudioDistance:
         new = (cache_dir / f.name).with_suffix(".wav")
 
         if not new.exists():
-            sox_args = ['-r', str(self.ml.sr), '-c', '1', '-b', '16']
-            cache_dir.mkdir(parents=True, exist_ok=True)
-
-            # ffmpeg has bad resampling compared to SoX
-            # SoX has bad format support compared to ffmpeg
-            # If the file format is not supported by SoX, use ffmpeg to convert it to wav
-
-            if f.suffix[1:] not in self.sox_formats:
-                # Use ffmpeg for format conversion and then pipe to sox for resampling
-                with tempfile.TemporaryDirectory() as tmp:
-                    tmp = Path(tmp) / 'temp.wav'
-
-                    # Open ffmpeg process for format conversion
-                    subprocess.run([
-                        ffmpeg_path, 
-                        "-hide_banner", "-loglevel", "error", 
-                        "-i", f, tmp])
-                    
-                    # Open sox process for resampling, taking input from ffmpeg's output
-                    subprocess.run([sox_path, tmp, *sox_args, new])
-                    
-            else:
-                # Use sox for resampling
-                subprocess.run([sox_path, f, *sox_args, new])
+            if TORCHAUDIO_RESAMPLING:
+                x, fsorig = torchaudio.load(f)
+                x = torch.mean(x,0).unsqueeze(0) # convert to mono
+                resampler = torchaudio.transforms.Resample(
+                    fsorig,
+                    self.ml.sr,
+                    lowpass_filter_width=64,
+                    rolloff=0.9475937167399596,
+                    resampling_method="sinc_interp_kaiser",
+                    beta=14.769656459379492,
+                )
+                y = resampler(x)
+                torchaudio.save(new, y, self.ml.sr, encoding="PCM_S", bits_per_sample=16)
+            else:                
+                sox_args = ['-r', str(self.ml.sr), '-c', '1', '-b', '16']
+                cache_dir.mkdir(parents=True, exist_ok=True)
+    
+                # ffmpeg has bad resampling compared to SoX
+                # SoX has bad format support compared to ffmpeg
+                # If the file format is not supported by SoX, use ffmpeg to convert it to wav
+    
+                if f.suffix[1:] not in self.sox_formats:
+                    # Use ffmpeg for format conversion and then pipe to sox for resampling
+                    with tempfile.TemporaryDirectory() as tmp:
+                        tmp = Path(tmp) / 'temp.wav'
+    
+                        # Open ffmpeg process for format conversion
+                        subprocess.run([
+                            ffmpeg_path, 
+                            "-hide_banner", "-loglevel", "error", 
+                            "-i", f, tmp])
+                        
+                        # Open sox process for resampling, taking input from ffmpeg's output
+                        subprocess.run([sox_path, tmp, *sox_args, new])
+                        
+                else:
+                    # Use sox for resampling
+                    subprocess.run([sox_path, f, *sox_args, new])
 
         return self.ml.load_wav(new)
 
