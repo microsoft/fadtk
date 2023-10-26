@@ -263,6 +263,7 @@ class CLAPLaionModel(ModelLoader):
     """
     CLAP model from https://github.com/LAION-AI/CLAP
     """
+    
     def __init__(self, type: Literal['audio', 'music']):
         super().__init__(f"clap-laion-{type}", 512, 48000)
         self.type = type
@@ -278,7 +279,48 @@ class CLAPLaionModel(ModelLoader):
         if not self.model_file.exists():
             self.model_file.parent.mkdir(parents=True, exist_ok=True)
             download_file(url, self.model_file)
+            
+        # Patch the model file to remove position_ids (will raise an error otherwise)
+        self.patch_model_430(self.model_file)
 
+    def patch_model_430(self, file: Path):
+        """
+        Patch the model file to remove position_ids (will raise an error otherwise)
+        This is a new issue after the transformers 4.30.0 update
+        Please refer to https://github.com/LAION-AI/CLAP/issues/127
+        """
+        # Create a "patched" file when patching is done
+        patched = file.parent / f"{file.name}.patched.430"
+        if patched.exists():
+            return
+        
+        OFFENDING_KEY = "module.text_branch.embeddings.position_ids"
+        log.warning("Patching LAION-CLAP's model checkpoints")
+        
+        # Load the checkpoint from the given path
+        checkpoint = torch.load(file, map_location="cpu")
+
+        # Extract the state_dict from the checkpoint
+        if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+            state_dict = checkpoint["state_dict"]
+        else:
+            state_dict = checkpoint
+
+        # Delete the specific key from the state_dict
+        if OFFENDING_KEY in state_dict:
+            del state_dict[OFFENDING_KEY]
+
+        # Save the modified state_dict back to the checkpoint
+        if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+            checkpoint["state_dict"] = state_dict
+
+        # Save the modified checkpoint
+        torch.save(checkpoint, file)
+        log.warning(f"Saved patched checkpoint to {file}")
+        
+        # Create a "patched" file when patching is done
+        patched.touch()
+        
     def load_model(self):
         import laion_clap
 
