@@ -36,6 +36,7 @@ if __name__ == '__main__':
     for f in (fp / 'fad_scores').glob('*.csv'):
         model_name = f.stem.replace('-', '_')
         data = pd.read_csv(f, names=['file', 'score'])
+        data['file'] = data['file'].replace(r'\\', '/', regex=True) # convert Windows paths
         data['file'] = data['file'].apply(lambda x: '/'.join(x.split('/')[-2:]).split('.')[0])
         
         # Get the scores of the same model from the reference csv as an array
