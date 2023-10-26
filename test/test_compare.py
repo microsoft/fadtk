@@ -1,5 +1,3 @@
-
-
 import os
 from pathlib import Path
 import numpy as np
@@ -18,6 +16,7 @@ if __name__ == '__main__':
 
     # Compute FAD score
     for model in get_all_models():
+        print(f'Computing FAD score for {model.name}')
         csv = fp / 'fad_scores' / f'{model.name}.csv'
         if csv.is_file():
             continue
