@@ -25,15 +25,10 @@ You can listen to audio samples of per-song FAD outliers on the online demo here
 
 ## 0x01. Installation
 
-To use the FAD toolkit, you must first install it. This library is tested on Python 3.11 on Linux but should work on Python >3.9 and on Windows as well.
+To use the FAD toolkit, you must first install it. This library is created and tested on Python 3.11 on Linux but should work on Python >3.9 and on Windows and macOS as well.
 
 1. Install torch https://pytorch.org/
 2. `pip install fadtk`
-3. Install [ffmpeg](https://ffmpeg.org/) and [SoX](https://sox.sourceforge.net/) using your system's package manager (e.g. [brew](https://brew.sh/) for macOS, apt for Ubuntu, etc.)
-
-For Windows users: Please make sure ffmpeg and SoX are installed and placed in $PATH.
-
-If you want to use a version of ffmpeg or SoX that's different from the version in $PATH, you can set the `FFMPEG_PATH` and `SOX_PATH` environment variables before running the program.
 
 ### Optional Dependencies
 
