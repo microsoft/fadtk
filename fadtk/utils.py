@@ -50,8 +50,11 @@ def find_sox_formats(sox_path: str) -> list[str]:
     """
     Find a list of file formats supported by SoX
     """
-    out = subprocess.check_output((sox_path, "-h")).decode()
-    return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
+    try:
+        out = subprocess.check_output((sox_path, "-h")).decode()
+        return substr_between(out, "AUDIO FILE FORMATS: ", "\n").split()
+    except:
+        return []
 
 
 def get_cache_embedding_path(model: str, audio_dir: PathLike) -> Path:
