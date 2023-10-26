@@ -158,8 +158,8 @@ tokens.toml
 .syncthing*
 *.pt
 .model-checkpoints
-test/fad_scores
-test/samples/embeddings
-test/samples/convert
-test/samples/stats
-test/comparison.csv
+fadtk/test/fad_scores
+fadtk/test/samples/embeddings
+fadtk/test/samples/convert
+fadtk/test/samples/stats
+fadtk/test/comparison.csv
