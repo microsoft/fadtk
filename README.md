@@ -30,6 +30,8 @@ To use the FAD toolkit, you must first install it. This library is created and t
 1. Install torch https://pytorch.org/
 2. `pip install fadtk`
 
+To ensure that the environment is setup correctly and everything work as intended, it is recommended to run our tests using the command `python -m fadtk.test` after installing.
+
 ### Optional Dependencies
 
 Optionally, you can install dependencies that add additional embedding support. They are:
