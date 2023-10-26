@@ -1,13 +1,13 @@
-import os
 from pathlib import Path
+import traceback
 import numpy as np
 import pandas as pd
 
-import fadtk
 from fadtk.fad import FrechetAudioDistance
-from fadtk.fad_batch import cache_embedding_files
 from fadtk.model_loader import get_all_models
+from hypy_utils.logging_utils import setup_logger
 
+log = setup_logger()
 
 if __name__ == '__main__':
     # Read samples csv
@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     # Compute FAD score
     for model in get_all_models():
-        print(f'Computing FAD score for {model.name}')
+        log.info(f'Computing FAD score for {model.name}')
         csv = fp / 'fad_scores' / f'{model.name}.csv'
         if csv.is_file():
             continue
@@ -24,12 +24,29 @@ if __name__ == '__main__':
         fad = FrechetAudioDistance(model, audio_load_worker=1, load_model=True)
         
         # Cache embedding files
-        # cache_embedding_files(fp / 'samples', model, workers=4)
-        for f in (fp / 'samples').glob('*.*'):
-            fad.cache_embedding_file(f)
+        try:
+            for f in (fp / 'samples').glob('*.*'):
+                fad.cache_embedding_file(f)
+        except Exception as e:
+            traceback.print_exc()
+            log.error(f'Error when caching embedding files for {model.name}: {e}')
+            exit(1)
         
-        # Compute FAD score
-        fad.score_individual('fma_pop', fp / 'samples', csv)
+        try:
+            # Compute FAD score
+            fad.score_individual('fma_pop', fp / 'samples', csv)
+        except Exception as e:
+            traceback.print_exc()
+            log.error(f'Error when computing FAD score for {model.name}: {e}')
+            exit(1)
+            
+        # Compute FAD for entire set
+        all_score = fad.score('fma_pop', fp / 'samples')
+        
+        # Add all_score to csv with file name '/samples/all'
+        data = pd.read_csv(csv, names=['file', 'score'])
+        data = pd.concat([data, pd.DataFrame([['/samples/all', all_score]], columns=['file', 'score'])])
+        data.to_csv(csv, index=False, header=False)
 
     # Read from csvs
     table = []
@@ -54,18 +71,22 @@ if __name__ == '__main__':
         mse = ((data - test) ** 2).mean()
         max_abs_diff = np.abs(data - test).max()
         mean = np.mean(data)
+        madp = max_abs_diff / mean * 100
         table.append({
             'model': model_name,
             'mse': mse,
             'max_abs_diff': max_abs_diff,
             'mean': mean,
-            'mad%': max_abs_diff / mean * 100
+            'mad%': madp,
+            'pass': madp < 5  # 5% threshold
         })
         
     # Print table
     table = pd.DataFrame(table)
-    print(table)
+    log.info(table)
     table.to_csv(fp / 'comparison.csv')
-        
-        
     
+    # If anything failed, exit with error code 2
+    if not table['pass'].all():
+        log.error('Some models failed the test')
+        exit(2)
