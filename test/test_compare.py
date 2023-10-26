@@ -36,23 +36,18 @@ if __name__ == '__main__':
     for f in (fp / 'fad_scores').glob('*.csv'):
         model_name = f.stem.replace('-', '_')
         data = pd.read_csv(f, names=['file', 'score'])
-        data['file'] = data['file'].apply(lambda x: x.split('/')[-2:])
+        data['file'] = data['file'].apply(lambda x: '/'.join(x.split('/')[-2:]).split('.')[0])
         
         # Get the scores of the same model from the reference csv as an array
         # They should be in FAD_{model_name}_fma_pop column
         test = reference.loc[:, ['song_id', f'FAD_{model_name}_fma_pop']].copy()
         test.columns = ['file', 'score']
         
-        # Sort files
-        data.sort_values(by='file', inplace=True)
-        test.sort_values(by='file', inplace=True)
+        # Transform test to a dictionary of file: score
+        test = test.set_index('file').to_dict()['score']
         
-        # Skip if the number of files are not the same
-        if len(data) != len(test):
-            continue
-        
+        test = np.array([test[f] for f in data['file']])
         data = np.array(data['score'])
-        test = np.array(test['score'])
         
         # Compare mean sqaurred error
         mse = ((data - test) ** 2).mean()
