@@ -138,15 +138,35 @@ We also include some sample code and data from the paper in this repo.
 
 [musiccaps-public-openai.csv](datasets/musiccaps-public-openai.csv): This file contains the original MusicCaps song IDs and captions along with GPT4 labels for their quality and the GPT4-refined prompts used for music generation.
 
-* The method we used to create GPT4 one-shot prompts for these generation can be found in [example/prompts](example/prompts).
-
 [fma_pop_tracks.csv](datasets/fma_pop_tracks.csv): This file contains the subset of 4839 song IDs and metadata information for the FMA-Pop subset we proposed in our paper. After downloading the Free Music Archive dataset from the [original source](https://github.com/mdeff/fma), you can easily locate the audio files for this FMA-Pop subset using song IDs.
 
 ### Sample Code
 
+The method we used to create GPT4 one-shot prompts for generating the refined MusicCaps prompts and for classifying quality from the MusicCaps captions can be found in [example/prompts](example/prompts).
 
+## 0x06. Acknowledgments and Licenses
 
-## 0x06. Special Thanks
+The code in this toolkit is licensed under the [MIT License](./LICENSE). Please cite our work if this repository helped you in your project. 
+
+```latex
+@TODO
+```
+
+Please also cite the FMA (Free Music Archive) dataset if you used FMA as your FAD scoring baseline.
+
+```latex
+@inproceedings{fma_dataset,
+  title = {{FMA}: A Dataset for Music Analysis},
+  author = {Defferrard, Micha\"el and Benzi, Kirell and Vandergheynst, Pierre and Bresson, Xavier},
+  booktitle = {18th International Society for Music Information Retrieval Conference (ISMIR)},
+  year = {2017},
+  archiveprefix = {arXiv},
+  eprint = {1612.01840},
+  url = {https://arxiv.org/abs/1612.01840},
+}
+```
+
+### Special Thanks
 
 **Immense gratitude to the foundational repository [gudgud96/frechet-audio-distance](https://github.com/gudgud96/frechet-audio-distance) - "A lightweight library for Frechet Audio Distance calculation"**. Much of our project has been adapted and enhanced from gudgud96's contributions. In honor of this work, we've retained the [original MIT license](example/LICENSE_gudgud96).
 
