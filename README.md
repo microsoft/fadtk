@@ -155,6 +155,7 @@ The code in this toolkit is licensed under the [MIT License](./LICENSE). Please 
   booktitle = {Submitted to IEEE ICASSP 2024},
   year = {2024},
   url = {https://arxiv.org},
+}
 ```
 
 Please also cite the FMA (Free Music Archive) dataset if you used FMA-Pop as your FAD scoring baseline.
