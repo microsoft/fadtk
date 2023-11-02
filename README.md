@@ -152,7 +152,7 @@ The code in this toolkit is licensed under the [MIT License](./LICENSE). Please 
 @TODO
 ```
 
-Please also cite the FMA (Free Music Archive) dataset if you used FMA as your FAD scoring baseline.
+Please also cite the FMA (Free Music Archive) dataset if you used FMA-Pop as your FAD scoring baseline.
 
 ```latex
 @inproceedings{fma_dataset,
