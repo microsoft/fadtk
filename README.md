@@ -154,7 +154,7 @@ The code in this toolkit is licensed under the [MIT License](./LICENSE). Please 
   author = {Azalea Gui, Hannes Gamper, Sebastian Braun, Dimitra Emmanouilidou},
   booktitle = {Submitted to IEEE ICASSP 2024},
   year = {2024},
-  url = {https://arxiv.org},
+  url = {https://arxiv.org/abs/2311.01616},
 }
 ```
 
