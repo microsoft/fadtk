@@ -144,7 +144,7 @@ We also include some sample code and data from the paper in this repo.
 
 The method we used to create GPT4 one-shot prompts for generating the refined MusicCaps prompts and for classifying quality from the MusicCaps captions can be found in [example/prompts](example/prompts).
 
-## 0x06. Acknowledgments and Licenses
+## 0x06. Citation, Acknowledgments and Licenses
 
 The code in this toolkit is licensed under the [MIT License](./LICENSE). Please cite our work if this repository helped you in your project. 
 
