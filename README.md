@@ -1,6 +1,6 @@
 # Frechet Audio Distance Toolkit
 
-A simple and standardized library for Frechet Audio Distance (FAD) calculation. This library is published along with the paper _Improving Frechet Audio Distance for Generative Music Evaluation_ (link coming soon). The datasets associated with this paper and sample code tools used in the paper are also available under this repository.
+A simple and standardized library for Frechet Audio Distance (FAD) calculation. This library is published along with the paper _Adapting Frechet Audio Distance for Generative Music Evaluation_ ([link to arXiv preprint](https://arxiv.org/abs/2311.01616)). The datasets associated with this paper and sample code tools used in the paper are also available under this repository.
 
 You can listen to audio samples of per-song FAD outliers on the online demo here: https://fadtk.hydev.org/
 
