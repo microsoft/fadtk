@@ -463,6 +463,280 @@ class CLAPModel(ModelLoader):
         x = np.clip(x, a_min=-1., a_max=1.)
         return (x * 32767.).astype(np.int16)
 
+
+class W2V2baseModel(ModelLoader):
+    """
+    W2V2base model from https://huggingface.co/facebook/wav2vec2-base-960h
+
+    Please specify the layer to use (1-12).
+    """
+    def __init__(self, size='960h', layer=12, limit_minutes=6):
+        super().__init__(f"w2v2base" + ("" if layer == 12 else f"-{layer}"), 768, 16000)
+        self.huggingface_id = f"facebook/wav2vec2-base-{size}"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import Wav2Vec2Model
+        
+        self.model = Wav2Vec2Model.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [13 layers, timeframes, 768]
+            out = out[self.layer] # [timeframes, 768]
+
+        return out
+
+
+class W2V2largeModel(ModelLoader):
+    """
+    W2V2large model from https://huggingface.co/facebook/wav2vec2-large-960h
+
+    Please specify the layer to use (1-24).
+    """
+    def __init__(self, size='960h', layer=24, limit_minutes=6):
+        super().__init__(f"w2v2large" + ("" if layer == 24 else f"-{layer}"), 1024, 16000)
+        self.huggingface_id = f"facebook/wav2vec2-large-{size}"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import Wav2Vec2Model
+        
+        self.model = Wav2Vec2Model.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [25 layers, timeframes, 1024]
+            out = out[self.layer] # [timeframes, 1024]
+
+        return out
+
+
+class HuBERTbaseModel(ModelLoader):
+    """
+    HuBERTbase model from https://huggingface.co/facebook/hubert-base-ls960
+
+    Please specify the layer to use (1-12).
+    """
+    def __init__(self, size='ls960', layer=12, limit_minutes=6):
+        super().__init__(f"hubertbase" + ("" if layer == 12 else f"-{layer}"), 768, 16000)
+        self.huggingface_id = f"facebook/hubert-base-{size}"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import HubertModel
+        
+        self.model = HubertModel.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained("facebook/hubert-large-ls960-ft")
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [13 layers, timeframes, 768]
+            out = out[self.layer] # [timeframes, 768]
+
+        return out
+
+
+class HuBERTlargeModel(ModelLoader):
+    """
+    HuBERTlarge model from https://huggingface.co/facebook/hubert-large-ls960
+
+    Please specify the layer to use (1-24).
+    """
+    def __init__(self, size='ls960-ft', layer=24, limit_minutes=6):
+        super().__init__(f"hubertlarge" + ("" if layer == 24 else f"-{layer}"), 1024, 16000)
+        self.huggingface_id = f"facebook/hubert-large-{size}"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import HubertModel
+        
+        self.model = HubertModel.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [25 layers, timeframes, 1024]
+            out = out[self.layer] # [timeframes, 1024]
+
+        return out
+
+
+class WavLMbaseModel(ModelLoader):
+    """
+    WavLMbase model from https://huggingface.co/microsoft/wavlm-base
+
+    Please specify the layer to use (1-12).
+    """
+    def __init__(self, layer=12, limit_minutes=6):
+        super().__init__(f"wavlmbase" + ("" if layer == 12 else f"-{layer}"), 768, 16000)
+        self.huggingface_id = f"patrickvonplaten/wavlm-libri-clean-100h-base"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import WavLMModel
+        
+        self.model = WavLMModel.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [13 layers, timeframes, 768]
+            out = out[self.layer] # [timeframes, 768]
+
+        return out
+
+
+class WavLMbaseplusModel(ModelLoader):
+    """
+    WavLMbaseplus model from https://huggingface.co/microsoft/wavlm-base-plus
+
+    Please specify the layer to use (1-12).
+    """
+    def __init__(self, layer=12, limit_minutes=6):
+        super().__init__(f"wavlmbaseplus" + ("" if layer == 12 else f"-{layer}"), 768, 16000)
+        self.huggingface_id = f"patrickvonplaten/wavlm-libri-clean-100h-base-plus"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import WavLMModel
+        
+        self.model = WavLMModel.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [13 layers, timeframes, 768]
+            out = out[self.layer] # [timeframes, 768]
+
+        return out
+
+
+class WavLMlargeModel(ModelLoader):
+    """
+    WavLMlarge model from https://huggingface.co/microsoft/wavlm-large
+
+    Please specify the layer to use (1-24).
+    """
+    def __init__(self, layer=24, limit_minutes=6):
+        super().__init__(f"wavlmlarge" + ("" if layer == 24 else f"-{layer}"), 1024, 16000)
+        self.huggingface_id = f"patrickvonplaten/wavlm-libri-clean-100h-large"
+        self.layer = layer
+        self.limit = limit_minutes * 60 * self.sr
+        
+    def load_model(self):
+        from transformers import AutoProcessor
+        from transformers import WavLMModel
+        
+        self.model = WavLMModel.from_pretrained(self.huggingface_id)
+        self.processor = AutoProcessor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        # Limit to 9 minutes
+        if audio.shape[0] > self.limit:
+            log.warning(f"Audio is too long ({audio.shape[0] / self.sr / 60:.2f} minutes > {self.limit / self.sr / 60:.2f} minutes). Truncating.")
+            audio = audio[:self.limit]
+
+        inputs = self.processor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            out = self.model(**inputs, output_hidden_states=True)
+            out = torch.stack(out.hidden_states).squeeze() # [25 layers, timeframes, 1024]
+            out = out[self.layer] # [timeframes, 1024]
+
+        return out
+
+
+class WhisperModel(ModelLoader):
+    """
+    Whisper model from https://huggingface.co/openai/whisper-base
+
+    """
+    def __init__(self):
+        super().__init__(f"whisper", 512, 16000)
+        self.huggingface_id = f"openai/whisper-base"
+        
+    def load_model(self):
+        from transformers import AutoFeatureExtractor
+        from transformers import WhisperModel
+        
+        self.model = WhisperModel.from_pretrained(self.huggingface_id)
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(self.huggingface_id)
+        self.model.to(self.device)
+
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        inputs = self.feature_extractor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
+        input_features = inputs.input_features
+        decoder_input_ids = torch.tensor([[1, 1]]) * self.model.config.decoder_start_token_id
+        with torch.no_grad():
+            out = self.model(input_features, decoder_input_ids=decoder_input_ids).last_hidden_state # [1, timeframes, 512]
+            out = out.squeeze() # [timeframes, 512]
+
+        return out
+
+
 def get_all_models() -> list[ModelLoader]:
     ms = [
         CLAPModel('2023'),
@@ -472,6 +746,14 @@ def get_all_models() -> list[ModelLoader]:
         EncodecEmbModel('24k'), EncodecEmbModel('48k'), 
         # DACModel(),
         # CdpamModel('acoustic'), CdpamModel('content'),
+        *(W2V2baseModel(layer=v) for v in range(1, 13)),
+        *(W2V2largeModel(layer=v) for v in range(1, 25)),
+        *(HuBERTbaseModel(layer=v) for v in range(1, 13)),
+        *(HuBERTlargeModel(layer=v) for v in range(1, 25)),
+        *(WavLMbaseModel(layer=v) for v in range(1, 13)),
+        *(WavLMbaseplusModel(layer=v) for v in range(1, 13)),
+        *(WavLMlargeModel(layer=v) for v in range(1, 25)),
+        WhisperModel(),
     ]
     if importlib.util.find_spec("dac") is not None:
         ms.append(DACModel())
