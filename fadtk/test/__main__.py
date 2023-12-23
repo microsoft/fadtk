@@ -14,8 +14,16 @@ if __name__ == '__main__':
     fp = Path(__file__).parent
     reference = pd.read_csv(fp / 'samples_FAD_scores.csv')
 
+    # Get reference models in column names
+    reference_models = [c.split('_', 1)[1].replace('_fma_pop', '') for c in reference.columns if c.startswith('FAD_')]
+    print("Models with reference data:", reference_models)
+
     # Compute FAD score
     for model in get_all_models():
+        if model.name.replace('-', '_') not in reference_models:
+            print(f'No reference data for {model.name}, skipping')
+            continue
+
         log.info(f'Computing FAD score for {model.name}')
         csv = fp / 'fad_scores' / f'{model.name}.csv'
         if csv.is_file():
