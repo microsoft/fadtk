@@ -24,6 +24,10 @@ if __name__ == '__main__':
             print(f'No reference data for {model.name}, skipping')
             continue
 
+        # Because of the heavy computation required to run each test, we limit the MERT models to only a few layers
+        if model.name.startswith('MERT') and model.name[-1] not in ['1', '4', '8', 'M']:
+            continue
+
         log.info(f'Computing FAD score for {model.name}')
         csv = fp / 'fad_scores' / f'{model.name}.csv'
         if csv.is_file():
