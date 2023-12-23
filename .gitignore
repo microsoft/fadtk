@@ -163,3 +163,6 @@ fadtk/test/samples/embeddings
 fadtk/test/samples/convert
 fadtk/test/samples/stats
 fadtk/test/comparison.csv
+
+.DS_Store
+._*
