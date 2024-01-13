@@ -593,7 +593,7 @@ class WhisperModel(ModelLoader):
         model_identifier = f"whisper-{size}"
 
         super().__init__(model_identifier, model_dim, 16000)
-        self.huggingface_id = f"openai/whisper-large"
+        self.huggingface_id = f"openai/whisper-{size}"
         
     def load_model(self):
         from transformers import AutoFeatureExtractor
