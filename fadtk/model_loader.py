@@ -138,7 +138,7 @@ class EncodecEmbModel(ModelLoader):
         import torchaudio
         from encodec.utils import convert_audio
 
-        wav, sr = torchaudio.load(wav_file)
+        wav, sr = torchaudio.load(str(wav_file))
         wav = convert_audio(wav, sr, self.sr, self.model.channels)
 
         # If it's longer than 3 minutes, cut it
