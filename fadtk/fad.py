@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torchaudio
 from scipy import linalg
-from scipy.linalg import sqrtm as scisqrt
+from scipy import sqrt as scisqrt
 from pathlib import Path
 from hypy_utils import write
 from hypy_utils.tqdm_utils import tq, tmap
