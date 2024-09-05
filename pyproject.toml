@@ -23,6 +23,8 @@ laion-clap = "^1.1.6"
 nnaudio = "^0.3.2"
 torch = "~2.1.0"
 msclap = "^1.3.3"
+# Resampy is a dependency of vggish, which is dynamically loaded from torch hub
+resampy = "^0.4.3"
 
 [tool.poetry.scripts]
 fadtk = "fadtk.__main__:main"
