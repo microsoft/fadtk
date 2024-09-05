@@ -12,6 +12,7 @@ from pathlib import Path
 from hypy_utils.downloader import download_file
 import torch.nn.functional as F
 import importlib.util
+import importlib.metadata
 
 
 log = logging.getLogger(__name__)
@@ -281,7 +282,16 @@ class CLAPLaionModel(ModelLoader):
             download_file(url, self.model_file)
             
         # Patch the model file to remove position_ids (will raise an error otherwise)
-        self.patch_model_430(self.model_file)
+        # This key must be removed for CLAP version <= 1.1.5
+        # But it must be kept for CLAP version >= 1.1.6
+        package_name = "laion_clap"
+        from packaging import version
+        ver = version.parse(importlib.metadata.version(package_name))
+        if ver < version.parse("1.1.6"):
+            self.patch_model_430(self.model_file)
+        else:
+            self.unpatch_model_430(self.model_file)
+
 
     def patch_model_430(self, file: Path):
         """
@@ -294,32 +304,52 @@ class CLAPLaionModel(ModelLoader):
         if patched.exists():
             return
         
-        OFFENDING_KEY = "module.text_branch.embeddings.position_ids"
         log.warning("Patching LAION-CLAP's model checkpoints")
         
         # Load the checkpoint from the given path
-        checkpoint = torch.load(file, map_location="cpu")
+        ck = torch.load(file, map_location="cpu")
 
         # Extract the state_dict from the checkpoint
-        if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-            state_dict = checkpoint["state_dict"]
-        else:
-            state_dict = checkpoint
+        unwrap = isinstance(ck, dict) and "state_dict" in ck
+        sd = ck["state_dict"] if unwrap else ck
 
         # Delete the specific key from the state_dict
-        if OFFENDING_KEY in state_dict:
-            del state_dict[OFFENDING_KEY]
+        sd.pop("module.text_branch.embeddings.position_ids", None)
 
         # Save the modified state_dict back to the checkpoint
-        if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-            checkpoint["state_dict"] = state_dict
+        if isinstance(ck, dict) and "state_dict" in ck:
+            ck["state_dict"] = sd
 
         # Save the modified checkpoint
-        torch.save(checkpoint, file)
+        torch.save(ck, file)
         log.warning(f"Saved patched checkpoint to {file}")
         
         # Create a "patched" file when patching is done
         patched.touch()
+            
+
+    def unpatch_model_430(self, file: Path):
+        """
+        Since CLAP 1.1.6, its codebase provided its own workarounds that isn't compatible
+        with our patch. This function will revert the patch to make it compatible with the new
+        CLAP version.
+        """
+        patched = file.parent / f"{file.name}.patched.430"
+        if not patched.exists():
+            return
+        
+        # The below is an inverse operation of the patch_model_430 function, so comments are omitted
+        log.warning("Unpatching LAION-CLAP's model checkpoints")
+        ck = torch.load(file, map_location="cpu")
+        unwrap = isinstance(ck, dict) and "state_dict" in ck
+        sd = ck["state_dict"] if unwrap else ck
+        sd["module.text_branch.embeddings.position_ids"] = 0
+        if isinstance(ck, dict) and "state_dict" in ck:
+            ck["state_dict"] = sd
+        torch.save(ck, file)
+        log.warning(f"Saved unpatched checkpoint to {file}")
+        patched.unlink()
+        
         
     def load_model(self):
         import laion_clap
