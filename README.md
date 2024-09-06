@@ -26,6 +26,7 @@ You can listen to audio samples of per-song FAD outliers on the online demo here
 | [HuBERT](https://github.com/facebookresearch/fairseq/blob/main/examples/hubert/README.md) | `hubert-{base/large}` | HuBERT: Self-Supervised Speech Representation Learning by Masked Prediction of Hidden Units | Facebook/Meta Research |
 | [WavLM](https://github.com/microsoft/unilm/tree/master/wavlm) | `wavlm-{base/base-plus/large}` | WavLM: Large-Scale Self-Supervised Pre-Training for Full Stack Speech Processing | Microsoft |
 | [Whisper](https://github.com/openai/whisper) | `whisper-{tiny/base/small/medium/large}` | Robust Speech Recognition via Large-Scale Weak Supervision | OpenAI |
+| [OpenL3](https://github.com/marl/openl3) | `openl3-{music/env}-{mel256/mel128/linear}-{512/6144}` | Open-source deep audio and image embeddings | NYU MARL |
 
 ## 0x01. Installation
 

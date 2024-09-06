@@ -69,6 +69,9 @@ class VGGishModel(ModelLoader):
         self.use_activation = use_activation
 
     def load_model(self):
+        # Torch hub will download the code and model weights dynamically
+        # This is not a good practice as it doesn't check dependency compatibility
+        # But there's nothing we can do about it :(
         self.model = torch.hub.load('harritaylor/torchvggish', 'vggish')
         if not self.use_pca:
             self.model.postprocess = False
@@ -494,6 +497,32 @@ class CLAPModel(ModelLoader):
         return (x * 32767.).astype(np.int16)
 
 
+class OpenL3Model(ModelLoader):
+    """
+    OpenL3: Open-source deep audio and image embeddings
+    
+    Parameters: content_type (music or env), input_repr (mel128, mel256, or linear), embedding_size (512 or 6144)
+    
+    Requires optional dependency: openl3 (tested on v0.4.2)
+    """
+    def __init__(self, 
+        content_type: Literal['music', 'env'] = 'music', 
+        input_repr: Literal['mel256', 'mel128', 'linear'] = 'mel128',
+        embedding_size: int = 6144
+    ):
+        super().__init__(f"openl3-{content_type}-{input_repr}-{embedding_size}", embedding_size, 48000)
+        self.content_type = content_type
+        self.input_repr = input_repr
+    
+    def load_model(self):
+        pass
+    
+    def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
+        import openl3
+        emb, _ = openl3.get_audio_embedding(audio, sr=self.sr, content_type=self.content_type, input_repr=self.input_repr)
+        return emb
+
+
 class W2V2Model(ModelLoader):
     """
     W2V2 model from https://huggingface.co/facebook/wav2vec2-base-960h, https://huggingface.co/facebook/wav2vec2-large-960h
@@ -669,5 +698,10 @@ def get_all_models() -> list[ModelLoader]:
         ms.append(DACModel())
     if importlib.util.find_spec("cdpam") is not None:
         ms += [CdpamModel('acoustic'), CdpamModel('content')]
+    if importlib.util.find_spec("openl3") is not None:
+        for content_type in ['music', 'env']:
+            for input_repr in ['mel256', 'mel128', 'linear']:
+                for embedding_size in [512, 6144]:
+                    ms.append(OpenL3Model(content_type, input_repr, embedding_size))
 
     return ms
