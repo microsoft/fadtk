@@ -179,7 +179,7 @@ Please also cite the FMA (Free Music Archive) dataset if you used FMA-Pop as you
 You may also refer to our work on measuring music emotion using this toolkit.
 
 ```latex
-@article{musicemotion,
+@article{musicemotion_fad,
   title = {Rethinking Emotion Bias in Music via Frechet Audio Distance},
   author = {Li, Yuanchao and Gui, Azalea and Emmanouilidou, Dimitra and Gamper, Hannes},
   journal={arXiv preprint arXiv:2409.15545},
