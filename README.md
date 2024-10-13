@@ -176,6 +176,17 @@ Please also cite the FMA (Free Music Archive) dataset if you used FMA-Pop as you
 }
 ```
 
+You may also refer to our work on measuring music emotion and mitigating emotion bias using this toolkit.
+
+```latex
+@article{emotionbias_fad,
+  title = {Rethinking Emotion Bias in Music via Frechet Audio Distance},
+  author = {Li, Yuanchao and Gui, Azalea and Emmanouilidou, Dimitra and Gamper, Hannes},
+  journal={arXiv preprint arXiv:2409.15545},
+  year={2024}
+}
+```
+
 ### Special Thanks
 
 **Immense gratitude to the foundational repository [gudgud96/frechet-audio-distance](https://github.com/gudgud96/frechet-audio-distance) - "A lightweight library for Frechet Audio Distance calculation"**. Much of our project has been adapted and enhanced from gudgud96's contributions. In honor of this work, we've retained the [original MIT license](example/LICENSE_gudgud96).
