@@ -42,6 +42,8 @@ def calc_embd_statistics(embd_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the mean and covariance matrix of a list of embeddings.
     """
+    assert embd_lst.shape[0] >= 2, (f"FAD requires at least two embedding window frames, you have {embd_lst.shape}."
+        " (This probably means that your audio is too short)")
     return np.mean(embd_lst, axis=0), np.cov(embd_lst, rowvar=False)
 
 
