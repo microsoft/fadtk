@@ -22,11 +22,19 @@ class ModelLoader(ABC):
     """
     Abstract class for loading a model and getting embeddings from it. The model should be loaded in the `load_model` method.
     """
-    def __init__(self, name: str, num_features: int, sr: int):
+    def __init__(self, name: str, num_features: int, sr: int, min_len: int = -1):
+        """
+        Args:
+            name (str): A unique identifier for the model.
+            num_features (int): Number of features in the output embedding (dimensionality).
+            sr (int): Sample rate of the audio.
+            min_len (int, optional): Enforce a minimal length for the audio in seconds. Defaults to -1 (no minimum).
+        """
         self.model = None
         self.sr = sr
         self.num_features = num_features
         self.name = name
+        self.min_len = min_len
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     def get_embedding(self, audio: np.ndarray):
@@ -55,8 +63,27 @@ class ModelLoader(ABC):
     def load_wav(self, wav_file: Path):
         wav_data, _ = soundfile.read(wav_file, dtype='int16')
         wav_data = wav_data / 32768.0  # Convert to [-1.0, +1.0]
+        
+        # Enforce minimum length
+        wav_data = self.enforce_min_len(wav_data)
 
         return wav_data
+    
+    def enforce_min_len(self, audio: np.ndarray) -> np.ndarray:
+        """
+        Enforce a minimum length for the audio. If the audio is too short, output a warning and pad it with zeros.
+        """
+        if self.min_len < 0:
+            return audio
+        if audio.shape[0] < self.min_len * self.sr:
+            log.warning(
+                f"Audio is too short for {self.name}.\n"
+                f"The model requires a minimum length of {self.min_len}s, audio is {audio.shape[0] / self.sr:.2f}s.\n"
+                f"Padding with zeros."
+            )
+            audio = np.pad(audio, (0, int(np.ceil(self.min_len * self.sr - audio.shape[0]))))
+            print()
+        return audio
 
 
 class VGGishModel(ModelLoader):
@@ -64,7 +91,7 @@ class VGGishModel(ModelLoader):
     S. Hershey et al., "CNN Architectures for Large-Scale Audio Classification", ICASSP 2017
     """
     def __init__(self, use_pca=False, use_activation=False):
-        super().__init__("vggish", 128, 16000)
+        super().__init__("vggish", 128, 16000, min_len=1)
         self.use_pca = use_pca
         self.use_activation = use_activation
 
