@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fadtk"
-version = "1.0.0"
+version = "1.0.2"
 description = "A simple and standardized library for Frechet Audio Distance calculation."
 authors = ["Azalea <me@hydev.org>"]
 readme = "README.md"
