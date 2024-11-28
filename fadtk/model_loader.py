@@ -658,15 +658,15 @@ class WhisperModel(ModelLoader):
         
         self.model = WhisperModel.from_pretrained(self.huggingface_id)
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(self.huggingface_id)
+        self.decoder_input_ids = (torch.tensor([[1, 1]]) * self.model.config.decoder_start_token_id).to(self.device)
         self.model.to(self.device)
 
     def _get_embedding(self, audio: np.ndarray) -> np.ndarray:
         inputs = self.feature_extractor(audio, sampling_rate=self.sr, return_tensors="pt").to(self.device)
-        input_features = inputs.input_features
-        decoder_input_ids = torch.tensor([[1, 1]]) * self.model.config.decoder_start_token_id
+        input_features = inputs.input_features.to(self.device)
         with torch.no_grad():
-            out = self.model(input_features, decoder_input_ids=decoder_input_ids).last_hidden_state # [1, timeframes, 512]
-            out = out.squeeze() # [timeframes, 384 or 512 or 768 or 1024 or 1280]
+            out = self.model(input_features, decoder_input_ids=self.decoder_input_ids).last_hidden_state  # [1, timeframes, 512]
+            out = out.squeeze() # [timeframes, (384 or 512 or 768 or 1024 or 1280)]
 
         return out
 
