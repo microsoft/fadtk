@@ -156,7 +156,7 @@ class FrechetAudioDistance:
                     beta=14.769656459379492,
                 )
                 y = resampler(x)
-                torchaudio.save(new, y, self.ml.sr, encoding="PCM_S", bits_per_sample=16)
+                torchaudio.save(str(new), y, self.ml.sr, encoding="PCM_S", bits_per_sample=16)
             else:                
                 sox_args = ['-r', str(self.ml.sr), '-c', '1', '-b', '16']
     
