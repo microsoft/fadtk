@@ -32,7 +32,7 @@ You can listen to audio samples of per-song FAD outliers on the online demo here
 
 ## 0x01. Installation
 
-To use the FAD toolkit, you must first install it. This library is created and tested on Python 3.11 on Linux but should work on Python >3.9 and on Windows and macOS as well.
+To use the FAD toolkit, you must first install it. This library is created and tested on Python 3.12 on Linux but should work on Python >3.10 and on Windows and macOS as well.
 
 1. Install torch https://pytorch.org/
 2. `pip install fadtk`
