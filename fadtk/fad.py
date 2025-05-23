@@ -20,6 +20,7 @@ from .utils import *
 log = setup_logger()
 sox_path = os.environ.get('SOX_PATH', 'sox')
 ffmpeg_path = os.environ.get('FFMPEG_PATH', 'ffmpeg')
+torchaudio_backend = os.environ.get('TORCHAUDIO_BACKEND', 'soundfile')
 TORCHAUDIO_RESAMPLING = True
 
 if not(TORCHAUDIO_RESAMPLING):
@@ -145,7 +146,7 @@ class FrechetAudioDistance:
         if not new.exists():
             cache_dir.mkdir(parents=True, exist_ok=True)
             if TORCHAUDIO_RESAMPLING:
-                x, fsorig = torchaudio.load(str(f))
+                x, fsorig = torchaudio.load(str(f), backend=torchaudio_backend)
                 x = torch.mean(x,0).unsqueeze(0) # convert to mono
                 resampler = torchaudio.transforms.Resample(
                     fsorig,
@@ -157,7 +158,7 @@ class FrechetAudioDistance:
                 )
                 y = resampler(x)
                 torchaudio.save(str(new), y, self.ml.sr, encoding="PCM_S", bits_per_sample=16)
-            else:                
+            else:
                 sox_args = ['-r', str(self.ml.sr), '-c', '1', '-b', '16']
     
                 # ffmpeg has bad resampling compared to SoX

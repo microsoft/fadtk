@@ -264,10 +264,11 @@ class MERTModel(ModelLoader):
         self.limit = limit_minutes * 60 * self.sr
         
     def load_model(self):
-        from transformers import Wav2Vec2FeatureExtractor
-        from transformers import AutoModel
+        from transformers import Wav2Vec2FeatureExtractor, AutoModel, AutoConfig
         
-        self.model = AutoModel.from_pretrained(self.huggingface_id, trust_remote_code=True)
+        cfg = AutoConfig.from_pretrained(self.huggingface_id, trust_remote_code=True)
+        cfg.conv_pos_batch_norm = False
+        self.model = AutoModel.from_pretrained(self.huggingface_id, trust_remote_code=True, config=cfg)
         self.processor = Wav2Vec2FeatureExtractor.from_pretrained(self.huggingface_id, trust_remote_code=True)
         # self.sr = self.processor.sampling_rate
         self.model.to(self.device)
