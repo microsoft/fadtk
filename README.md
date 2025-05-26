@@ -66,7 +66,7 @@ fadtk encodec-emb fma_pop /path/to/evaluation/audio --inf
 #### Example 2: Compute individual FAD scores for each song
 
 ```sh
-fadtk encodec-emb fma_pop /path/to/evaluation/audio --indiv scores.csv
+fadtk encodec-emb fma_pop /path/to/evaluation/audio scores.csv --indiv
 ```
 
 #### Example 3: Compute FAD scores with your own baseline
